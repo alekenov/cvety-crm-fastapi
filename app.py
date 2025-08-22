@@ -2466,10 +2466,26 @@ async def webhook_bitrix_order(
                     db.table('order_items').insert(item).execute()
             
             # ====== ОБРАТНАЯ СИНХРОНИЗАЦИЯ В BITRIX ======
-            # Если заказ создан не из Bitrix (проверяем источник webhook)
+            # Проверяем нужно ли выполнять обратную синхронизацию
             webhook_source = data.get('webhook_source', '')
-            if action == 'create_order' and not webhook_source.startswith('production_real'):
-                logger.info(f"🔄 Starting reverse sync for non-Bitrix order: {data.get('ID')}")
+            recipient_name = data.get('properties', {}).get('nameRecipient') or data.get('recipient_name', '')
+            order_id = data.get('ID', '')
+            
+            # НЕ синхронизировать если:
+            # 1. Заказ создан из production Bitrix
+            # 2. Это тестовый заказ обратной синхронизации  
+            # 3. ID заказа подозрительно высокий (timestamp-like)
+            # 4. Синхронизация отключена
+            should_skip_sync = (
+                webhook_source.startswith('production_real') or
+                'Получатель Обратной Синхронизации' in recipient_name or
+                'reverse_sync' in recipient_name.lower() or
+                int(str(order_id)[:10]) > 1756000000 or  # Timestamp больше чем Aug 2025
+                not app_config.BITRIX_SYNC_ENABLED
+            )
+            
+            if action == 'create_order' and not should_skip_sync:
+                logger.info(f"🔄 Starting reverse sync for non-Bitrix order: {order_id}")
                 
                 # Получаем товары заказа для передачи в Bitrix
                 order_items = []
@@ -2511,6 +2527,8 @@ async def webhook_bitrix_order(
                         supabase_order_id = result.data[0]['id']
                     
                     logger.warning(f"⚠️ Reverse sync failed for order {supabase_order_id}, but order created in Supabase")
+            elif action == 'create_order' and should_skip_sync:
+                logger.info(f"⏭️ Skipping reverse sync for order {order_id}: test/system order")
             else:
                 logger.debug(f"⏩ Skipping reverse sync: webhook_source={webhook_source}, action={action}")
             
