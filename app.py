@@ -130,21 +130,30 @@ async def startup():
     logger.info(f"SUPABASE_URL present: {bool(app_config.SUPABASE_URL)}")
     logger.info(f"SUPABASE_SERVICE_KEY present: {bool(app_config.SUPABASE_SERVICE_KEY)}")
     
-    if not app_config.SUPABASE_URL or not app_config.SUPABASE_SERVICE_KEY:
+    if not app_config.SUPABASE_URL or (not app_config.SUPABASE_SERVICE_KEY and not app_config.SUPABASE_ANON_KEY):
         logger.error("Missing Supabase configuration. Please check your .env file.")
         return
     
     try:
-        supabase = create_client(app_config.SUPABASE_URL, app_config.SUPABASE_SERVICE_KEY)
-        logger.info("Supabase client created successfully")
+        # Try service key first, fallback to anon key if needed
+        service_key = app_config.SUPABASE_SERVICE_KEY or app_config.SUPABASE_ANON_KEY
+        supabase = create_client(app_config.SUPABASE_URL, service_key)
+        logger.info(f"Supabase client created with {'service' if app_config.SUPABASE_SERVICE_KEY else 'anon'} key")
         
-        # Test connection
+        # Test connection with a simple query that should work with anon key
         test_result = supabase.table("orders").select("id").limit(1).execute()
         logger.info("Supabase connection test successful")
         logger.info("CRM application started successfully")
     except Exception as e:
         logger.error(f"Failed to initialize Supabase: {e}")
-        logger.info("CRM application started with database connection issues")
+        # Try with anon key as fallback
+        try:
+            supabase = create_client(app_config.SUPABASE_URL, app_config.SUPABASE_ANON_KEY)
+            logger.info("Fallback: Using anon key for Supabase connection")
+            logger.info("CRM application started with limited database access")
+        except Exception as e2:
+            logger.error(f"Fallback also failed: {e2}")
+            logger.info("CRM application started with database connection issues")
 
 def get_supabase():
     """Dependency to get Supabase client"""
