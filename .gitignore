@@ -150,5 +150,4 @@ basket_aug_*.csv
 *.tar.gz
 
 # Sensitive files
-webhook_deduplication.py
 *.php.backup.*
