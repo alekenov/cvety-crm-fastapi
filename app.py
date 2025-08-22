@@ -2357,6 +2357,7 @@ async def webhook_bitrix_order(
     """
     Handle webhook from Bitrix for order creation/update
     """
+    data = {}  # Initialize data variable
     try:
         # Get request body
         body = await request.json()
