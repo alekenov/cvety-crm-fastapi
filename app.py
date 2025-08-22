@@ -141,6 +141,11 @@ def get_supabase():
 
 # ==================== DASHBOARD ====================
 
+@app.get("/")
+async def root():
+    """Redirect root to CRM dashboard"""
+    return RedirectResponse(url="/crm")
+
 @app.get("/crm", response_class=HTMLResponse)
 async def crm_dashboard(
     request: Request,
