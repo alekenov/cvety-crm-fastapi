@@ -126,12 +126,25 @@ async def startup():
     """Initialize Supabase client on startup"""
     global supabase
     
+    logger.info("Starting CRM application...")
+    logger.info(f"SUPABASE_URL present: {bool(app_config.SUPABASE_URL)}")
+    logger.info(f"SUPABASE_SERVICE_KEY present: {bool(app_config.SUPABASE_SERVICE_KEY)}")
+    
     if not app_config.SUPABASE_URL or not app_config.SUPABASE_SERVICE_KEY:
         logger.error("Missing Supabase configuration. Please check your .env file.")
         return
     
-    supabase = create_client(app_config.SUPABASE_URL, app_config.SUPABASE_SERVICE_KEY)
-    logger.info("CRM application started successfully")
+    try:
+        supabase = create_client(app_config.SUPABASE_URL, app_config.SUPABASE_SERVICE_KEY)
+        logger.info("Supabase client created successfully")
+        
+        # Test connection
+        test_result = supabase.table("orders").select("id").limit(1).execute()
+        logger.info("Supabase connection test successful")
+        logger.info("CRM application started successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase: {e}")
+        logger.info("CRM application started with database connection issues")
 
 def get_supabase():
     """Dependency to get Supabase client"""
