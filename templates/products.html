@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Товары - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">🌸 Товары ({{ total }})</h2>
+    <a href="/crm/products/new" class="btn btn-success">➕ Создать товар</a>
+</div>
+
+<div class="filters">
+    <form method="get">
+        <input type="text" 
+               name="search" 
+               placeholder="Поиск по названию товара" 
+               value="{{ search_term or '' }}"
+               style="min-width: 300px;">
+        
+        <button type="submit" class="btn btn-primary">🔍 Найти</button>
+        
+        {% if search_term %}
+        <a href="/crm/products" class="btn btn-secondary">✖ Сбросить</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if products %}
+<div class="card">
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Фото</th>
+                    <th>Название</th>
+                    <th>Цена</th>
+                    <th>Статус</th>
+                    <th>Дата создания</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr {% if not product.is_active %}style="opacity: 0.6;"{% endif %}>
+                    <td style="padding: 8px;">
+                        {% set image_url = product.get('metadata', {}).get('properties', {}).get('ru_img_miniature') %}
+                        {% if image_url %}
+                        <img src="https://cvety.kz{{ image_url }}" 
+                             alt="{{ product.name }}" 
+                             style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
+                        {% else %}
+                        <div style="width: 60px; height: 60px; background: #f8f9fa; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #6c757d; font-size: 14px;">
+                            🌸
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ product.name }}</strong>
+                        {% if product.description and product.description|length > 100 %}
+                        <br><small style="color: #6c757d;">{{ product.description[:100] }}...</small>
+                        {% elif product.description %}
+                        <br><small style="color: #6c757d;">{{ product.description }}</small>
+                        {% endif %}
+                        {% if product.slug %}
+                        <br><small style="color: #6c757d;">Slug: {{ product.slug }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product.old_price and product.old_price > product.price %}
+                        <span style="text-decoration: line-through; color: #6c757d;">
+                            {{ "%.0f"|format(product.old_price) }} ₸
+                        </span><br>
+                        {% endif %}
+                        <strong style="color: #27ae60;">{{ "%.0f"|format(product.price) }} ₸</strong>
+                    </td>
+                    <td>
+                        {% if product.is_active %}
+                        <span class="status" style="background: #d4edda; color: #155724;">Активен</span>
+                        {% else %}
+                        <span class="status" style="background: #f8d7da; color: #721c24;">Неактивен</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product.created_at %}
+                        {{ product.created_at[:10] }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/crm/products/{{ product.id }}" class="btn btn-primary" style="margin-right: 0.5rem;">
+                            👁 Просмотр
+                        </a>
+                        <a href="/crm/products/{{ product.id }}/edit" class="btn btn-secondary" style="margin-right: 0.5rem;">
+                            ✏️ Редактировать
+                        </a>
+                        <button onclick="deleteProduct('{{ product.id }}', '{{ product.name }}')" 
+                                class="btn btn-danger">
+                            🗑️ Удалить
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if search_term %}&search={{ search_term }}{% endif %}">
+            ← Назад
+        </a>
+    {% endif %}
+    
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+            <a href="?page={{ p }}{% if search_term %}&search={{ search_term }}{% endif %}">
+                {{ p }}
+            </a>
+        {% elif p == page - 3 or p == page + 3 %}
+            <span>...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{% if search_term %}&search={{ search_term }}{% endif %}">
+            Вперёд →
+        </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 4rem 2rem;">
+        <h3 style="color: #6c757d; margin-bottom: 1rem;">🌸 Товары не найдены</h3>
+        {% if search_term %}
+        <p style="color: #6c757d;">Попробуйте изменить поисковой запрос</p>
+        <a href="/crm/products" class="btn btn-primary" style="margin-top: 1rem;">
+            Показать все товары
+        </a>
+        {% else %}
+        <p style="color: #6c757d;">В системе пока нет товаров</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+async function deleteProduct(productId, productName) {
+    // Show confirmation dialog
+    if (!confirm(`Вы уверены, что хотите удалить товар "${productName}"?\n\nЭто действие нельзя отменить.`)) {
+        return;
+    }
+    
+    try {
+        // Disable all delete buttons during the operation
+        const deleteButtons = document.querySelectorAll('button[onclick*="deleteProduct"]');
+        deleteButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Удаление...';
+        });
+        
+        // Make DELETE request to API
+        const response = await fetch(`/api/products/${productId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Show success message
+            alert(`✅ ${result.message}`);
+            
+            // Reload the page to update the product list
+            window.location.reload();
+        } else {
+            const error = await response.json();
+            alert(`❌ Ошибка при удалении товара: ${error.detail || 'Неизвестная ошибка'}`);
+            
+            // Re-enable buttons on error
+            deleteButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = '🗑️ Удалить';
+            });
+        }
+        
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert(`❌ Ошибка сети при удалении товара: ${error.message}`);
+        
+        // Re-enable buttons on error
+        const deleteButtons = document.querySelectorAll('button[onclick*="deleteProduct"]');
+        deleteButtons.forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '🗑️ Удалить';
+        });
+    }
+}
+</script>
+{% endblock %}

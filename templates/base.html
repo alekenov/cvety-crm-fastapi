@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CRM System{% endblock %}</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f8f9fa;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .nav {
+            background: #34495e;
+            padding: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+        }
+        
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 1rem 1.5rem;
+            display: block;
+            transition: background 0.2s;
+        }
+        
+        .nav a:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .nav a.active {
+            background: #2c3e50;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: #f8f9fa;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .card-body {
+            padding: 2rem;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Final states - most used (97.3% of orders) */
+        .status-F, .status-completed { 
+            background: #d4edda; 
+            color: #155724; 
+            font-weight: 600;
+        }
+        .status-UN, .status-cancelled { 
+            background: #f8d7da; 
+            color: #721c24; 
+            font-weight: 600;
+        }
+        
+        /* Problem handling */
+        .status-RF { 
+            background: #fff3cd; 
+            color: #856404; 
+        }
+        .status-RD { 
+            background: #ffeaa7; 
+            color: #856404; 
+        }
+        
+        /* Delivery process */
+        .status-TR, .status-DE { 
+            background: #cce5ff; 
+            color: #004085; 
+        }
+        
+        /* Workflow statuses */
+        .status-N, .status-new { 
+            background: #fff3cd; 
+            color: #856404; 
+        }
+        .status-CO { 
+            background: #d1ecf1; 
+            color: #0c5460; 
+        }
+        .status-PD { 
+            background: #d4edda; 
+            color: #155724; 
+        }
+        .status-RO { 
+            background: #e2e3e5; 
+            color: #383d41; 
+        }
+        .status-CF { 
+            background: #f8d7da; 
+            color: #721c24; 
+        }
+        .status-CA, .status-ER { 
+            background: #f5c6cb; 
+            color: #721c24; 
+        }
+        
+        /* Legacy statuses */
+        .status-processing, .status-shipped, .status-delivered { 
+            background: #d1ecf1; 
+            color: #0c5460; 
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .btn-primary { 
+            background: #3498db; 
+            color: white; 
+        }
+        .btn-success { 
+            background: #27ae60; 
+            color: white; 
+        }
+        .btn-danger { 
+            background: #e74c3c; 
+            color: white; 
+        }
+        .btn-secondary { 
+            background: #6c757d; 
+            color: white; 
+        }
+        
+        .filters {
+            background: white;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .filters form {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filters input, 
+        .filters select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        
+        .filters input:focus,
+        .filters select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        .pagination {
+            margin-top: 2rem;
+            text-align: center;
+        }
+        
+        .pagination a {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 0 4px;
+            background: white;
+            color: #3498db;
+            text-decoration: none;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        
+        .pagination a:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        .pagination .current {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        
+        .alert {
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 0.5rem;
+            }
+            
+            .filters form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filters input,
+            .filters select {
+                width: 100%;
+            }
+            
+            table {
+                font-size: 0.875rem;
+            }
+            
+            th, td {
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏪 CRM System - Cvety.kz</h1>
+    </div>
+    
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/crm" class="{% if active_page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+            <a href="/crm/orders" class="{% if active_page == 'orders' %}active{% endif %}">📦 Заказы</a>
+            <a href="/crm/products" class="{% if active_page == 'products' %}active{% endif %}">🌸 Товары</a>
+            <a href="/crm/inventory" class="{% if active_page == 'inventory' %}active{% endif %}">📦 Управление складом</a>
+        </div>
+    </nav>
+    
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

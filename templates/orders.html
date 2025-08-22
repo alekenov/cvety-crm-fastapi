@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Заказы - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">📦 Заказы ({{ total }})</h2>
+    <a href="/crm/orders/new" class="btn btn-success">➕ Новый заказ</a>
+</div>
+
+<!-- Active/Archive Toggle -->
+<div style="display: flex; gap: 10px; margin-bottom: 1rem;">
+    {% if current_view == "active" %}
+        <span class="btn btn-primary" style="opacity: 1;">📋 Активные</span>
+        <a href="/crm/orders?view=archive{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" 
+           class="btn btn-secondary" style="opacity: 0.6;">📁 Архив</a>
+    {% else %}
+        <a href="/crm/orders?view=active{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" 
+           class="btn btn-secondary" style="opacity: 0.6;">📋 Активные</a>
+        <span class="btn btn-primary" style="opacity: 1;">📁 Архив</span>
+    {% endif %}
+</div>
+
+<div class="filters">
+    <form method="get">
+        <!-- Preserve view parameter -->
+        <input type="hidden" name="view" value="{{ current_view or 'active' }}">
+        
+        <input type="text" 
+               name="search" 
+               placeholder="Поиск по номеру, имени или телефону" 
+               value="{{ search_term or '' }}"
+               style="min-width: 300px;">
+        
+        <select name="status">
+            <option value="">Все статусы</option>
+            {% for status_key, status_name in order_statuses.items() %}
+            <option value="{{ status_key }}" 
+                    {% if current_status == status_key %}selected{% endif %}>
+                {{ status_name }}
+            </option>
+            {% endfor %}
+        </select>
+        
+        <button type="submit" class="btn btn-primary">🔍 Фильтровать</button>
+        
+        {% if search_term or current_status %}
+        <a href="/crm/orders?view={{ current_view or 'active' }}" class="btn btn-secondary">✖ Сбросить</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if orders %}
+<div class="card">
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60px;">Фото</th>
+                    <th>Номер</th>
+                    <th>Статус</th>
+                    <th>Клиент</th>
+                    <th>Телефон</th>
+                    <th>Адрес доставки</th>
+                    <th>Сумма</th>
+                    <th>Дата создания</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td style="padding: 8px;">
+                        {% if order.first_item_image %}
+                        <img src="{{ order.first_item_image }}" 
+                             alt="Товар из заказа" 
+                             style="width: 45px; height: 45px; object-fit: cover; border-radius: 4px;">
+                        {% else %}
+                        <div style="width: 45px; height: 45px; background: #f8f9fa; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #6c757d; font-size: 14px;">
+                            📦
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ order.order_number or ('Order #' + (order.id[:8] if order.id else 'Unknown')) }}</strong>
+                    </td>
+                    <td>
+                        <span class="status status-{{ order.status }}">
+                            {{ order_statuses.get(order.status, order.status) }}
+                        </span>
+                    </td>
+                    <td>{{ order.recipient_name }}</td>
+                    <td>
+                        <a href="tel:{{ order.recipient_phone }}">
+                            {{ order.recipient_phone }}
+                        </a>
+                    </td>
+                    <td title="{{ order.delivery_address or 'Не указан' }}">
+                        {% if order.delivery_address %}
+                            {% if order.delivery_address|length > 50 %}
+                                {{ order.delivery_address[:50] }}...
+                            {% else %}
+                                {{ order.delivery_address }}
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #6c757d;">Не указан</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ "%.0f"|format(order.total_amount) }} ₸</strong></td>
+                    <td>
+                        {% if order.created_at %}
+                            {{ order.created_at[:16].replace('T', ' ') }}
+                        {% else %}
+                            <span style="color: #6c757d;">Не указана</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/crm/orders/{{ order.id }}" class="btn btn-primary">
+                            👁 Открыть
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if current_view %}&view={{ current_view }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}">
+            ← Назад
+        </a>
+    {% endif %}
+    
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+            <a href="?page={{ p }}{% if current_view %}&view={{ current_view }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}">
+                {{ p }}
+            </a>
+        {% elif p == page - 3 or p == page + 3 %}
+            <span>...</span>
+        {% endif %}
+    {% endfor %}
+    
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{% if current_view %}&view={{ current_view }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}">
+            Вперёд →
+        </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 4rem 2rem;">
+        <h3 style="color: #6c757d; margin-bottom: 1rem;">📦 Заказов не найдено</h3>
+        {% if search_term or current_status %}
+        <p style="color: #6c757d;">Попробуйте изменить фильтры или очистить поиск</p>
+        <a href="/crm/orders?view={{ current_view or 'active' }}" class="btn btn-primary" style="margin-top: 1rem;">
+            Показать все заказы
+        </a>
+        {% else %}
+        <p style="color: #6c757d;">В системе пока нет заказов</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

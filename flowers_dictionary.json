@@ -1,0 +1,578 @@
+[
+  {
+    "xml_id": "roses",
+    "name": "Розы",
+    "name_en": "Roses",
+    "usage_count": 20598,
+    "avg_amount": 16.701233728385468,
+    "sort_order": 10,
+    "is_active": true
+  },
+  {
+    "xml_id": "chrysanthemums",
+    "name": "Хризантемы",
+    "name_en": "Chrysanthemums",
+    "usage_count": 10653,
+    "avg_amount": 3.8030061061531235,
+    "sort_order": 20,
+    "is_active": true
+  },
+  {
+    "xml_id": "dutch-roses",
+    "name": "Dutch Roses",
+    "name_en": "Dutch Roses",
+    "usage_count": 9915,
+    "avg_amount": 18.895448582097085,
+    "sort_order": 30,
+    "is_active": true
+  },
+  {
+    "xml_id": "shrub-roses",
+    "name": "Кустовые розы",
+    "name_en": "Shrub Roses",
+    "usage_count": 9493,
+    "avg_amount": 8.819264411423754,
+    "sort_order": 40,
+    "is_active": true
+  },
+  {
+    "xml_id": "hydrangeas",
+    "name": "Гортензии",
+    "name_en": "Hydrangeas",
+    "usage_count": 7473,
+    "avg_amount": 2.5483395822174613,
+    "sort_order": 50,
+    "is_active": true
+  },
+  {
+    "xml_id": "carnations",
+    "name": "Гвоздики",
+    "name_en": "Carnations",
+    "usage_count": 5805,
+    "avg_amount": 3.750560248233063,
+    "sort_order": 60,
+    "is_active": true
+  },
+  {
+    "xml_id": "eustomas",
+    "name": "Eustomas",
+    "name_en": "Eustomas",
+    "usage_count": 5597,
+    "avg_amount": 5.8245708154506435,
+    "sort_order": 70,
+    "is_active": true
+  },
+  {
+    "xml_id": "peony-roses",
+    "name": "Peony Roses",
+    "name_en": "Peony Roses",
+    "usage_count": 2961,
+    "avg_amount": 9.62521122000676,
+    "sort_order": 80,
+    "is_active": true
+  },
+  {
+    "xml_id": "tulips",
+    "name": "Тюльпаны",
+    "name_en": "Tulips",
+    "usage_count": 2682,
+    "avg_amount": 35.10820895522388,
+    "sort_order": 90,
+    "is_active": true
+  },
+  {
+    "xml_id": "peonies",
+    "name": "Пионы",
+    "name_en": "Peonies",
+    "usage_count": 2616,
+    "avg_amount": 41.60512232415902,
+    "sort_order": 100,
+    "is_active": true
+  },
+  {
+    "xml_id": "gipsofila",
+    "name": "Гипсофила",
+    "name_en": "Gipsofila",
+    "usage_count": 2604,
+    "avg_amount": 4.867935409457901,
+    "sort_order": 110,
+    "is_active": true
+  },
+  {
+    "xml_id": "alstroemerias",
+    "name": "Альстромерии",
+    "name_en": "Alstroemerias",
+    "usage_count": 2147,
+    "avg_amount": 3.830848089468779,
+    "sort_order": 120,
+    "is_active": true
+  },
+  {
+    "xml_id": "lilies",
+    "name": "Лилии",
+    "name_en": "Lilies",
+    "usage_count": 1271,
+    "avg_amount": 21.4026792750197,
+    "sort_order": 130,
+    "is_active": true
+  },
+  {
+    "xml_id": "gerbera",
+    "name": "Gerbera",
+    "name_en": "Gerbera",
+    "usage_count": 1067,
+    "avg_amount": 2.6425891181988743,
+    "sort_order": 140,
+    "is_active": true
+  },
+  {
+    "xml_id": "nobilis",
+    "name": "Nobilis",
+    "name_en": "Nobilis",
+    "usage_count": 918,
+    "avg_amount": 2.7011995637949835,
+    "sort_order": 150,
+    "is_active": true
+  },
+  {
+    "xml_id": "suhocvet",
+    "name": "Suhocvet",
+    "name_en": "Suhocvet",
+    "usage_count": 757,
+    "avg_amount": 3.066225165562914,
+    "sort_order": 160,
+    "is_active": true
+  },
+  {
+    "xml_id": "daisies",
+    "name": "Daisies",
+    "name_en": "Daisies",
+    "usage_count": 746,
+    "avg_amount": 5.248322147651007,
+    "sort_order": 170,
+    "is_active": true
+  },
+  {
+    "xml_id": "orchids",
+    "name": "Орхидеи",
+    "name_en": "Orchids",
+    "usage_count": 670,
+    "avg_amount": 3.147761194029851,
+    "sort_order": 180,
+    "is_active": true
+  },
+  {
+    "xml_id": "field-flowers",
+    "name": "Field Flowers",
+    "name_en": "Field Flowers",
+    "usage_count": 564,
+    "avg_amount": 2.8543516873889874,
+    "sort_order": 190,
+    "is_active": true
+  },
+  {
+    "xml_id": "lilacs",
+    "name": "Lilacs",
+    "name_en": "Lilacs",
+    "usage_count": 487,
+    "avg_amount": 6.792607802874743,
+    "sort_order": 200,
+    "is_active": true
+  },
+  {
+    "xml_id": "pistachio",
+    "name": "Pistachio",
+    "name_en": "Pistachio",
+    "usage_count": 386,
+    "avg_amount": 2.6658031088082903,
+    "sort_order": 210,
+    "is_active": true
+  },
+  {
+    "xml_id": "ranunculus",
+    "name": "Ranunculus",
+    "name_en": "Ranunculus",
+    "usage_count": 360,
+    "avg_amount": 18.61111111111111,
+    "sort_order": 220,
+    "is_active": true
+  },
+  {
+    "xml_id": "eucalyptus",
+    "name": "Эвкалипт",
+    "name_en": "Eucalyptus",
+    "usage_count": 318,
+    "avg_amount": 1.7106918238993711,
+    "sort_order": 230,
+    "is_active": true
+  },
+  {
+    "xml_id": "delphinium",
+    "name": "Дельфиниум",
+    "name_en": "Delphinium",
+    "usage_count": 307,
+    "avg_amount": 2.1563517915309447,
+    "sort_order": 240,
+    "is_active": true
+  },
+  {
+    "xml_id": "miks",
+    "name": "Miks",
+    "name_en": "Miks",
+    "usage_count": 258,
+    "avg_amount": 1.2015503875968991,
+    "sort_order": 250,
+    "is_active": true
+  },
+  {
+    "xml_id": "irises",
+    "name": "Irises",
+    "name_en": "Irises",
+    "usage_count": 207,
+    "avg_amount": 4.333333333333333,
+    "sort_order": 260,
+    "is_active": true
+  },
+  {
+    "xml_id": "georgin",
+    "name": "Georgin",
+    "name_en": "Georgin",
+    "usage_count": 201,
+    "avg_amount": 4.492537313432836,
+    "sort_order": 270,
+    "is_active": true
+  },
+  {
+    "xml_id": "sunflowers",
+    "name": "Подсолнухи",
+    "name_en": "Sunflowers",
+    "usage_count": 190,
+    "avg_amount": 3.4210526315789473,
+    "sort_order": 280,
+    "is_active": true
+  },
+  {
+    "xml_id": "pionovidnyy-tyulpan",
+    "name": "Pionovidnyy Tyulpan",
+    "name_en": "Pionovidnyy Tyulpan",
+    "usage_count": 188,
+    "avg_amount": 17.388297872340427,
+    "sort_order": 290,
+    "is_active": true
+  },
+  {
+    "xml_id": "ozotamnus",
+    "name": "Озотамнус",
+    "name_en": "Ozotamnus",
+    "usage_count": 183,
+    "avg_amount": 2.2131147540983607,
+    "sort_order": 300,
+    "is_active": true
+  },
+  {
+    "xml_id": "viburnum",
+    "name": "Viburnum",
+    "name_en": "Viburnum",
+    "usage_count": 179,
+    "avg_amount": 1.6033519553072626,
+    "sort_order": 310,
+    "is_active": true
+  },
+  {
+    "xml_id": "callas",
+    "name": "Callas",
+    "name_en": "Callas",
+    "usage_count": 147,
+    "avg_amount": 3.5850340136054424,
+    "sort_order": 320,
+    "is_active": true
+  },
+  {
+    "xml_id": "ruskus",
+    "name": "Ruskus",
+    "name_en": "Ruskus",
+    "usage_count": 113,
+    "avg_amount": 2.150442477876106,
+    "sort_order": 330,
+    "is_active": true
+  },
+  {
+    "xml_id": "hyacinths",
+    "name": "Hyacinths",
+    "name_en": "Hyacinths",
+    "usage_count": 113,
+    "avg_amount": 6.672566371681416,
+    "sort_order": 340,
+    "is_active": true
+  },
+  {
+    "xml_id": "asters",
+    "name": "Asters",
+    "name_en": "Asters",
+    "usage_count": 106,
+    "avg_amount": 2.0095238095238095,
+    "sort_order": 350,
+    "is_active": true
+  },
+  {
+    "xml_id": "lagurus",
+    "name": "Lagurus",
+    "name_en": "Lagurus",
+    "usage_count": 103,
+    "avg_amount": 4.621359223300971,
+    "sort_order": 360,
+    "is_active": true
+  },
+  {
+    "xml_id": "freesias",
+    "name": "Freesias",
+    "name_en": "Freesias",
+    "usage_count": 79,
+    "avg_amount": 4.417721518987341,
+    "sort_order": 370,
+    "is_active": true
+  },
+  {
+    "xml_id": "anemon",
+    "name": "Anemon",
+    "name_en": "Anemon",
+    "usage_count": 53,
+    "avg_amount": 3.6226415094339623,
+    "sort_order": 380,
+    "is_active": true
+  },
+  {
+    "xml_id": "hypericum",
+    "name": "Hypericum",
+    "name_en": "Hypericum",
+    "usage_count": 42,
+    "avg_amount": 2.6666666666666665,
+    "sort_order": 390,
+    "is_active": true
+  },
+  {
+    "xml_id": "anthuriums",
+    "name": "Anthuriums",
+    "name_en": "Anthuriums",
+    "usage_count": 35,
+    "avg_amount": 8.2,
+    "sort_order": 400,
+    "is_active": true
+  },
+  {
+    "xml_id": "rizantema",
+    "name": "Rizantema",
+    "name_en": "Rizantema",
+    "usage_count": 30,
+    "avg_amount": 1.3333333333333333,
+    "sort_order": 410,
+    "is_active": true
+  },
+  {
+    "xml_id": "statica",
+    "name": "Statica",
+    "name_en": "Statica",
+    "usage_count": 29,
+    "avg_amount": 1.6551724137931034,
+    "sort_order": 420,
+    "is_active": true
+  },
+  {
+    "xml_id": "cornflowers",
+    "name": "Cornflowers",
+    "name_en": "Cornflowers",
+    "usage_count": 17,
+    "avg_amount": 4.8125,
+    "sort_order": 430,
+    "is_active": true
+  },
+  {
+    "xml_id": "ileks",
+    "name": "Ileks",
+    "name_en": "Ileks",
+    "usage_count": 14,
+    "avg_amount": 1.0714285714285714,
+    "sort_order": 440,
+    "is_active": true
+  },
+  {
+    "xml_id": "diantum",
+    "name": "Diantum",
+    "name_en": "Diantum",
+    "usage_count": 12,
+    "avg_amount": 6.0,
+    "sort_order": 450,
+    "is_active": true
+  },
+  {
+    "xml_id": "alenopsis",
+    "name": "Alenopsis",
+    "name_en": "Alenopsis",
+    "usage_count": 11,
+    "avg_amount": 1.2727272727272727,
+    "sort_order": 460,
+    "is_active": true
+  },
+  {
+    "xml_id": "stifa",
+    "name": "Stifa",
+    "name_en": "Stifa",
+    "usage_count": 9,
+    "avg_amount": 1.7777777777777777,
+    "sort_order": 470,
+    "is_active": true
+  },
+  {
+    "xml_id": "tyulpanov",
+    "name": "Tyulpanov",
+    "name_en": "Tyulpanov",
+    "usage_count": 8,
+    "avg_amount": 1.25,
+    "sort_order": 480,
+    "is_active": true
+  },
+  {
+    "xml_id": "glaonema",
+    "name": "Glaonema",
+    "name_en": "Glaonema",
+    "usage_count": 4,
+    "avg_amount": 1.0,
+    "sort_order": 490,
+    "is_active": true
+  },
+  {
+    "xml_id": "ukkulent",
+    "name": "Ukkulent",
+    "name_en": "Ukkulent",
+    "usage_count": 4,
+    "avg_amount": 2.5,
+    "sort_order": 500,
+    "is_active": true
+  },
+  {
+    "xml_id": "trelitciya",
+    "name": "Trelitciya",
+    "name_en": "Trelitciya",
+    "usage_count": 3,
+    "avg_amount": 3.6666666666666665,
+    "sort_order": 510,
+    "is_active": true
+  },
+  {
+    "xml_id": "amedoreya",
+    "name": "Amedoreya",
+    "name_en": "Amedoreya",
+    "usage_count": 2,
+    "avg_amount": 2.0,
+    "sort_order": 520,
+    "is_active": true
+  },
+  {
+    "xml_id": "edilantus",
+    "name": "Edilantus",
+    "name_en": "Edilantus",
+    "usage_count": 2,
+    "avg_amount": 4.0,
+    "sort_order": 530,
+    "is_active": true
+  },
+  {
+    "xml_id": "ordilina",
+    "name": "Ordilina",
+    "name_en": "Ordilina",
+    "usage_count": 2,
+    "avg_amount": 1.0,
+    "sort_order": 540,
+    "is_active": true
+  },
+  {
+    "xml_id": "ern",
+    "name": "Ern",
+    "name_en": "Ern",
+    "usage_count": 2,
+    "avg_amount": 1.0,
+    "sort_order": 550,
+    "is_active": true
+  },
+  {
+    "xml_id": "alanhoe",
+    "name": "Alanhoe",
+    "name_en": "Alanhoe",
+    "usage_count": 2,
+    "avg_amount": 1.0,
+    "sort_order": 560,
+    "is_active": true
+  },
+  {
+    "xml_id": "ikus",
+    "name": "Ikus",
+    "name_en": "Ikus",
+    "usage_count": 2,
+    "avg_amount": 1.0,
+    "sort_order": 570,
+    "is_active": true
+  },
+  {
+    "xml_id": "podsolnuhi",
+    "name": "Podsolnuhi",
+    "name_en": "Podsolnuhi",
+    "usage_count": 1,
+    "avg_amount": 1.0,
+    "sort_order": 580,
+    "is_active": true
+  },
+  {
+    "xml_id": "egoniya",
+    "name": "Egoniya",
+    "name_en": "Egoniya",
+    "usage_count": 1,
+    "avg_amount": 2.0,
+    "sort_order": 590,
+    "is_active": true
+  },
+  {
+    "xml_id": "eperomiya",
+    "name": "Eperomiya",
+    "name_en": "Eperomiya",
+    "usage_count": 1,
+    "avg_amount": 15.0,
+    "sort_order": 600,
+    "is_active": true
+  },
+  {
+    "xml_id": "uzmaniya",
+    "name": "Uzmaniya",
+    "name_en": "Uzmaniya",
+    "usage_count": 1,
+    "avg_amount": 1.0,
+    "sort_order": 610,
+    "is_active": true
+  },
+  {
+    "xml_id": "racena",
+    "name": "Racena",
+    "name_en": "Racena",
+    "usage_count": 1,
+    "avg_amount": 1.0,
+    "sort_order": 620,
+    "is_active": true
+  },
+  {
+    "xml_id": "patifillum",
+    "name": "Patifillum",
+    "name_en": "Patifillum",
+    "usage_count": 1,
+    "avg_amount": 1.0,
+    "sort_order": 630,
+    "is_active": true
+  },
+  {
+    "xml_id": "efflera",
+    "name": "Efflera",
+    "name_en": "Efflera",
+    "usage_count": 1,
+    "avg_amount": 1.0,
+    "sort_order": 640,
+    "is_active": true
+  }
+]

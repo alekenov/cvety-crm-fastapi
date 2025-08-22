@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Мониторинг синхронизации - CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0">
+                <i class="bi bi-arrow-repeat me-2"></i>
+                Мониторинг синхронизации
+            </h1>
+            <p class="text-muted">Статус синхронизации между Bitrix и CRM</p>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Синхронизировано сегодня</h6>
+                    <h3 class="card-title">{{ stats.daily_count or 0 }}</h3>
+                    <small class="text-success">
+                        <i class="bi bi-check-circle"></i> Активно
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Всего маппингов</h6>
+                    <h3 class="card-title">{{ mappings_count or 0 }}</h3>
+                    <small class="text-muted">Связанных записей</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Последняя синхронизация</h6>
+                    {% if stats.last_sync %}
+                        <p class="mb-0">{{ stats.last_sync.created_at|default('Нет данных') }}</p>
+                    {% else %}
+                        <p class="mb-0 text-muted">Нет данных</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Ошибки</h6>
+                    <h3 class="card-title text-danger">{{ stats.recent_errors|length }}</h3>
+                    <small class="text-muted">За последние 24 часа</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync State -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Состояние синхронизации</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Последний ID</th>
+                                    <th>Последняя синхронизация</th>
+                                    <th>Всего синхронизировано</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for state in sync_state %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary">{{ state.entity_type }}</span>
+                                    </td>
+                                    <td>{{ state.last_sync_id }}</td>
+                                    <td>{{ state.last_sync_at|default('Никогда') }}</td>
+                                    <td>{{ state.total_synced }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Syncs -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Последние синхронизации</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Время</th>
+                                    <th>Действие</th>
+                                    <th>Направление</th>
+                                    <th>Bitrix ID</th>
+                                    <th>Статус</th>
+                                    <th>Время обработки</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sync in stats.recent_syncs[:10] %}
+                                <tr>
+                                    <td>
+                                        <small>{{ sync.created_at }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ sync.action }}</span>
+                                    </td>
+                                    <td>
+                                        {% if sync.direction == 'bitrix_to_supabase' %}
+                                            <i class="bi bi-arrow-right text-primary"></i> Bitrix → CRM
+                                        {% else %}
+                                            <i class="bi bi-arrow-left text-success"></i> CRM → Bitrix
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ sync.bitrix_id|default('-') }}</td>
+                                    <td>
+                                        {% if sync.status == 'success' %}
+                                            <span class="badge bg-success">Успех</span>
+                                        {% elif sync.status == 'error' %}
+                                            <span class="badge bg-danger">Ошибка</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ sync.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if sync.processing_time_ms %}
+                                            {{ sync.processing_time_ms }} мс
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Errors -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Последние ошибки</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats.recent_errors %}
+                        {% for error in stats.recent_errors[:5] %}
+                        <div class="alert alert-danger p-2 mb-2">
+                            <small>
+                                <strong>{{ error.action }}</strong><br>
+                                {{ error.error_message }}<br>
+                                <span class="text-muted">{{ error.created_at }}</span>
+                            </small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">Нет ошибок</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Actions -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Ручные действия</h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-primary" onclick="forceSyncOrders()">
+                        <i class="bi bi-arrow-clockwise"></i> 
+                        Принудительная синхронизация заказов
+                    </button>
+                    <button class="btn btn-warning ms-2" onclick="clearSyncLogs()">
+                        <i class="bi bi-trash"></i> 
+                        Очистить логи
+                    </button>
+                    <button class="btn btn-info ms-2" onclick="testWebhook()">
+                        <i class="bi bi-bug"></i> 
+                        Тест webhook
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function forceSyncOrders() {
+    if (confirm('Запустить принудительную синхронизацию всех заказов?')) {
+        fetch('/api/sync/force', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                alert('Синхронизация запущена');
+                location.reload();
+            });
+    }
+}
+
+function clearSyncLogs() {
+    if (confirm('Очистить все логи синхронизации?')) {
+        fetch('/api/sync/clear-logs', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                alert('Логи очищены');
+                location.reload();
+            });
+    }
+}
+
+function testWebhook() {
+    fetch('/api/sync/test-webhook', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            alert('Тестовый webhook отправлен. Проверьте логи.');
+            location.reload();
+        });
+}
+
+// Auto-refresh every 30 seconds
+setTimeout(() => {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

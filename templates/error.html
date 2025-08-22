@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Ошибка - CRM{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 4rem auto;">
+    <div class="card-body" style="text-align: center; padding: 4rem 2rem;">
+        <div style="font-size: 4rem; margin-bottom: 2rem;">❌</div>
+        <h2 style="color: #e74c3c; margin-bottom: 1rem;">Произошла ошибка</h2>
+        <p style="color: #6c757d; margin-bottom: 2rem;">
+            {{ error or "Что-то пошло не так. Попробуйте позже." }}
+        </p>
+        
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="/crm" class="btn btn-primary">🏠 На главную</a>
+            <button onclick="history.back()" class="btn btn-secondary">← Назад</button>
+            <button onclick="location.reload()" class="btn btn-secondary">🔄 Обновить</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

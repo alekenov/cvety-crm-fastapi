@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Склад - CRM System{% endblock %}
+
+{% block content %}
+<div class="filters">
+    <h2 style="margin-bottom: 1rem;">🏪 Склад цветов</h2>
+    
+    <form method="GET" action="/crm/warehouse">
+        <input type="text" 
+               name="search" 
+               value="{{ search }}" 
+               placeholder="🔍 Поиск по названию цветка..." 
+               style="width: 300px;">
+        <button type="submit" class="btn btn-primary">Найти</button>
+        {% if search %}
+        <a href="/crm/warehouse" class="btn btn-secondary">Очистить</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ total_flowers }}</div>
+        <div class="stat-label">Всего видов цветов</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-number">{{ warehouse_stats|length }}</div>
+        <div class="stat-label">
+            {% if search %}
+                Найдено (поиск: "{{ search }}")
+            {% else %}
+                Показано
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-number">
+            {% set total_usage = 0 %}
+            {% for item in warehouse_stats %}
+                {% set total_usage = total_usage + item.total_used %}
+            {% endfor %}
+            {{ total_usage }}
+        </div>
+        <div class="stat-label">Всего цветов в составах</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-number">
+            {% set active_flowers = 0 %}
+            {% for item in warehouse_stats %}
+                {% if item.products_count > 0 %}
+                    {% set active_flowers = active_flowers + 1 %}
+                {% endif %}
+            {% endfor %}
+            {{ active_flowers }}
+        </div>
+        <div class="stat-label">Используются в букетах</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>📊 Статистика использования цветов</h3>
+        <p style="color: #6c757d; font-size: 0.9rem; margin-top: 0.5rem;">
+            Отсортировано по количеству использования в букетах
+        </p>
+    </div>
+    
+    <div class="card-body" style="padding: 0;">
+        {% if warehouse_stats %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Название цветка</th>
+                    <th style="width: 8rem;">XML ID</th>
+                    <th style="width: 7rem;">Всего в составах</th>
+                    <th style="width: 7rem;">В букетах</th>
+                    <th style="width: 10rem;">Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in warehouse_stats %}
+                <tr>
+                    <td>
+                        <a href="/crm/warehouse/{{ item.flower.id }}" 
+                           style="text-decoration: none; color: inherit;">
+                            <strong style="color: #4CAF50; text-decoration: underline;">{{ item.flower.name }}</strong>
+                        </a>
+                        {% if item.flower.color %}
+                        <br>
+                        <small style="color: #6c757d;">Цвет: {{ item.flower.color }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <code style="font-size: 0.8rem; background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">
+                            {{ item.flower.xml_id }}
+                        </code>
+                    </td>
+                    <td style="text-align: center;">
+                        {% if item.total_used > 0 %}
+                        <span style="font-size: 1.2rem; font-weight: 600; color: #27ae60;">
+                            {{ item.total_used }}
+                        </span>
+                        {% else %}
+                        <span style="color: #6c757d;">0</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        {% if item.products_count > 0 %}
+                        <span style="font-size: 1.1rem; font-weight: 500; color: #3498db;">
+                            {{ item.products_count }}
+                        </span>
+                        {% else %}
+                        <span style="color: #6c757d;">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.total_used > 100 %}
+                        <span class="status status-completed">Популярный</span>
+                        {% elif item.total_used > 20 %}
+                        <span class="status status-processing">Активный</span>
+                        {% elif item.total_used > 0 %}
+                        <span class="status status-new">Редкий</span>
+                        {% else %}
+                        <span class="status status-cancelled">Не используется</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 3rem; color: #6c757d;">
+            {% if search %}
+            <h4>🔍 Ничего не найдено</h4>
+            <p>По запросу "{{ search }}" цветы не найдены.</p>
+            <a href="/crm/warehouse" class="btn btn-primary">Показать все цветы</a>
+            {% else %}
+            <h4>🌸 Цветы не найдены</h4>
+            <p>В складе пока нет данных о цветах.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if warehouse_stats %}
+<div style="margin-top: 2rem; text-align: center; color: #6c757d; font-size: 0.9rem;">
+    <p>
+        💡 <strong>Совет:</strong> Цветы со статусом "Популярный" используются чаще всего в букетах. 
+        Цветы со статусом "Не используется" можно рассмотреть для удаления из словаря.
+    </p>
+</div>
+{% endif %}
+
+<style>
+    .card-body table {
+        margin: 0;
+    }
+    
+    .card-body tr:hover {
+        background: #f8f9fa;
+    }
+    
+    code {
+        font-size: 0.8rem;
+        background: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+{% endblock %}

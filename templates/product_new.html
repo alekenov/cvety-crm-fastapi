@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+
+{% block title %}Новый товар - CRM{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="page-header">
+        <h2>🌸 Создать новый товар</h2>
+        <a href="/crm/products" class="btn btn-secondary">← Вернуться к списку</a>
+    </div>
+
+    <form id="productForm" action="/crm/products/new" method="POST" class="product-form">
+        <div class="form-section">
+            <h3>Основная информация</h3>
+            
+            <div class="form-group">
+                <label for="name">Название товара *</label>
+                <input type="text" id="name" name="name" required maxlength="255" 
+                       placeholder="Например: Букет роз 'Нежность'">
+            </div>
+
+            <div class="form-group">
+                <label for="price">Цена (₸) *</label>
+                <input type="number" id="price" name="price" required min="1" 
+                       placeholder="15000">
+            </div>
+
+            <div class="form-group">
+                <label>🌸 Состав букета</label>
+                
+                <!-- Flower search and add -->
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" 
+                           id="flowerSearch" 
+                           placeholder="Начните вводить название цветка..."
+                           style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 5px;">
+                    <input type="number" 
+                           id="flowerAmount" 
+                           placeholder="Кол-во"
+                           min="1"
+                           value="1"
+                           style="width: 100px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 5px;">
+                    <button type="button" 
+                            id="addFlowerBtn"
+                            class="btn btn-primary"
+                            style="padding: 10px 20px;">
+                        ➕ Добавить
+                    </button>
+                </div>
+                
+                <!-- Flower suggestions dropdown -->
+                <div id="flowerSuggestions" 
+                     style="position: relative; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 5px; display: none; margin-bottom: 15px;">
+                </div>
+                
+                <!-- Selected flowers list -->
+                <div id="selectedFlowers" style="min-height: 50px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                    <div id="noFlowersMessage" style="color: #666; text-align: center;">Состав букета пока не указан</div>
+                </div>
+                
+                <!-- Hidden input to store composition JSON -->
+                <input type="hidden" id="compositionData" name="composition_data" value="[]">
+            </div>
+
+            <div class="form-group">
+                <label for="photos">📷 Фотографии товара</label>
+                <input type="file" id="photos" name="photos" 
+                       accept="image/*" multiple
+                       style="padding: 10px; border: 2px dashed #ddd; border-radius: 5px; width: 100%; cursor: pointer;">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Можно выбрать несколько фото. Поддерживаются форматы: JPG, PNG, WebP
+                </small>
+                <div id="photoPreview" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Описание</label>
+                <textarea id="description" name="description" rows="4" 
+                          placeholder="Дополнительное описание, особенности букета, рекомендации..."></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="category_id">Категория</label>
+                    <select id="category_id" name="category_id">
+                        <option value="">Выберите категорию</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="is_active">Статус</label>
+                    <select id="is_active" name="is_active">
+                        <option value="true">✅ Активен</option>
+                        <option value="false">❌ Неактивен</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Создать товар</button>
+            <button type="button" class="btn btn-secondary" onclick="window.location.href='/crm/products'">Отмена</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.content-wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.page-header h2 {
+    margin: 0;
+    color: #333;
+}
+
+.product-form {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.form-section {
+    padding: 25px;
+}
+
+.form-section h3 {
+    margin: 0 0 20px 0;
+    color: #555;
+    font-size: 1.2rem;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #555;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.form-actions {
+    padding: 20px 25px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    border-radius: 0 0 10px 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+/* Validation styles */
+input:invalid,
+textarea:invalid {
+    border-color: #dc3545;
+}
+
+input:valid,
+textarea:valid {
+    border-color: #28a745;
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Success message */
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border: 1px solid #c3e6cb;
+}
+
+/* Error message */
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border: 1px solid #f5c6cb;
+}
+</style>
+
+<script>
+// Flower composition management
+let selectedFlowers = [];
+let flowerDictionary = [];
+let selectedFlowerId = null;
+
+// Load flower dictionary on page load
+async function loadFlowers() {
+    try {
+        const response = await fetch('/api/flowers');
+        if (response.ok) {
+            flowerDictionary = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading flowers:', error);
+    }
+}
+
+// Initialize on page load
+loadFlowers();
+
+// Flower search functionality
+const flowerSearchInput = document.getElementById('flowerSearch');
+const flowerSuggestions = document.getElementById('flowerSuggestions');
+const flowerAmountInput = document.getElementById('flowerAmount');
+const addFlowerBtn = document.getElementById('addFlowerBtn');
+
+flowerSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    
+    if (query.length < 2) {
+        flowerSuggestions.style.display = 'none';
+        selectedFlowerId = null;
+        return;
+    }
+    
+    // Search in loaded dictionary
+    const matches = flowerDictionary.filter(flower => 
+        flower.name.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    if (matches.length > 0) {
+        flowerSuggestions.innerHTML = matches.map(flower => `
+            <div class="flower-suggestion" 
+                 data-id="${flower.id}" 
+                 data-name="${flower.name}"
+                 style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+                🌸 ${flower.name}
+            </div>
+        `).join('');
+        flowerSuggestions.style.display = 'block';
+        
+        // Add click handlers to suggestions
+        document.querySelectorAll('.flower-suggestion').forEach(item => {
+            item.addEventListener('click', () => {
+                selectedFlowerId = item.dataset.id;
+                flowerSearchInput.value = item.dataset.name;
+                flowerSuggestions.style.display = 'none';
+                flowerAmountInput.focus();
+            });
+            
+            item.addEventListener('mouseenter', () => {
+                item.style.background = '#e8f5e9';
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                item.style.background = 'white';
+            });
+        });
+    } else {
+        flowerSuggestions.innerHTML = '<div style="padding: 10px; color: #666;">Цветы не найдены</div>';
+        flowerSuggestions.style.display = 'block';
+    }
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    if (!flowerSearchInput.contains(e.target) && !flowerSuggestions.contains(e.target)) {
+        flowerSuggestions.style.display = 'none';
+    }
+});
+
+// Add flower to composition
+addFlowerBtn.addEventListener('click', () => {
+    if (!selectedFlowerId) {
+        alert('Выберите цветок из списка');
+        return;
+    }
+    
+    const amount = parseInt(flowerAmountInput.value);
+    if (!amount || amount < 1) {
+        alert('Укажите количество цветов');
+        return;
+    }
+    
+    // Check if flower already exists
+    const existingIndex = selectedFlowers.findIndex(f => f.flower_id === selectedFlowerId);
+    
+    if (existingIndex >= 0) {
+        // Update amount
+        selectedFlowers[existingIndex].amount += amount;
+    } else {
+        // Add new flower
+        const flower = flowerDictionary.find(f => f.id === selectedFlowerId);
+        selectedFlowers.push({
+            flower_id: selectedFlowerId,
+            flower_name: flower.name,
+            amount: amount
+        });
+    }
+    
+    // Update display
+    updateSelectedFlowersDisplay();
+    
+    // Clear inputs
+    flowerSearchInput.value = '';
+    flowerAmountInput.value = '1';
+    selectedFlowerId = null;
+    flowerSearchInput.focus();
+});
+
+// Update selected flowers display
+function updateSelectedFlowersDisplay() {
+    const container = document.getElementById('selectedFlowers');
+    
+    if (selectedFlowers.length === 0) {
+        container.innerHTML = '<div id="noFlowersMessage" style="color: #666; text-align: center;">Состав букета пока не указан</div>';
+    } else {
+        container.innerHTML = selectedFlowers.map((item, index) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 5px; background: white; border-radius: 5px; border: 1px solid #ddd;">
+                <span>🌸 ${item.amount} × ${item.flower_name}</span>
+                <button type="button" 
+                        onclick="removeFlower(${index})"
+                        style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
+                    ✖
+                </button>
+            </div>
+        `).join('');
+    }
+    
+    // Update hidden input
+    document.getElementById('compositionData').value = JSON.stringify(selectedFlowers);
+}
+
+// Remove flower from composition
+function removeFlower(index) {
+    selectedFlowers.splice(index, 1);
+    updateSelectedFlowersDisplay();
+}
+
+// Handle Enter key in amount field
+flowerAmountInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addFlowerBtn.click();
+    }
+});
+
+// Handle photo preview
+const photoInput = document.getElementById('photos');
+const photoPreview = document.getElementById('photoPreview');
+
+photoInput.addEventListener('change', (e) => {
+    photoPreview.innerHTML = '';
+    const files = Array.from(e.target.files);
+    
+    files.forEach((file, index) => {
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const previewDiv = document.createElement('div');
+                previewDiv.style.position = 'relative';
+                previewDiv.innerHTML = `
+                    <img src="${e.target.result}" 
+                         style="width: 100px; height: 100px; object-fit: cover; border-radius: 5px; border: 1px solid #ddd;">
+                    <small style="position: absolute; bottom: 0; left: 0; right: 0; 
+                                  background: rgba(0,0,0,0.7); color: white; 
+                                  padding: 2px; text-align: center; font-size: 10px;">
+                        ${file.name.substring(0, 10)}...
+                    </small>
+                `;
+                photoPreview.appendChild(previewDiv);
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    if (files.length > 0) {
+        const countText = document.createElement('div');
+        countText.style.width = '100%';
+        countText.style.marginTop = '5px';
+        countText.style.color = '#666';
+        countText.innerHTML = `<small>Выбрано фото: ${files.length}</small>`;
+        photoPreview.appendChild(countText);
+    }
+});
+
+document.getElementById('productForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    
+    // Prepare product data
+    const data = {
+        name: formData.get('name'),
+        price: Number(formData.get('price')),
+        quantity: 0,  // Default quantity
+        is_active: formData.get('is_active') === 'true',
+        description: formData.get('description') || null,
+        category_id: formData.get('category_id') || null,
+        composition: JSON.parse(formData.get('composition_data') || '[]')
+    };
+    
+    // Handle photo uploads
+    const photos = formData.getAll('photos');
+    const photoUrls = [];
+    
+    // For now, we'll store photos as base64 in the images array
+    // In production, you'd upload to a file storage service
+    for (let photo of photos) {
+        if (photo.size > 0) {
+            const reader = new FileReader();
+            const photoData = await new Promise((resolve) => {
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(photo);
+            });
+            photoUrls.push(photoData);
+        }
+    }
+    
+    if (photoUrls.length > 0) {
+        data.images = photoUrls;
+    }
+    
+    // Show loading state
+    form.classList.add('loading');
+    
+    try {
+        const response = await fetch('/crm/products/new', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            // Redirect to product list or detail page
+            window.location.href = `/crm/products/${result.id}/edit`;
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось создать товар'));
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    } finally {
+        form.classList.remove('loading');
+    }
+});
+
+</script>
+{% endblock %}

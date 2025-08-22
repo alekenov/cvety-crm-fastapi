@@ -1,0 +1,59 @@
+{
+  "event": "product.update",
+  "token": "fad5fbe4c8a520cf6d5453685b758c7fd9f6681f084be335fcdcd190ad9aaa0e",
+  "data": {
+    "ID": "999002",
+    "NAME": "ОБНОВЛЕННЫЙ букет 'Летний бриз'",
+    "CODE": "test_bouquet_summer_breeze",
+    "IBLOCK_ID": "2",
+    "IBLOCK_SECTION_ID": "15",
+    "ACTIVE": "Y",
+    "SORT": "500",
+    "PREVIEW_TEXT": "Яркий летний букет с солнечными подсолнухами",
+    "DETAIL_TEXT": "Прекрасная композиция из свежих подсолнухов, дополненная зеленью и декоративными элементами. Идеально подходит для поднятия настроения в любое время года.",
+    "PREVIEW_PICTURE": "12345",
+    "DETAIL_PICTURE": "12346",
+    "DATE_CREATE": "2025-08-21 16:30:00",
+    "TIMESTAMP_X": "2025-08-21 16:30:00",
+    "XML_ID": "BOUQUET_SUMMER_001",
+    "TAGS": "подсолнухи, лето, яркий, солнечный",
+    "PROPERTIES": {
+      "PRICE": {
+        "VALUE": "15000",
+        "DESCRIPTION": "Базовая цена"
+      },
+      "COLOR": {
+        "VALUE": "Желтый",
+        "CODE": "COLOR"
+      },
+      "SIZE": {
+        "VALUE": "Средний",
+        "CODE": "SIZE"
+      },
+      "FLOWERS_COUNT": {
+        "VALUE": "7",
+        "CODE": "FLOWERS_COUNT"
+      },
+      "CARE_INSTRUCTIONS": {
+        "VALUE": "Менять воду каждые 2 дня, обрезать стебли под углом",
+        "CODE": "CARE_INSTRUCTIONS"
+      },
+      "COMPOSITION": {
+        "VALUE": "Подсолнухи - 7 шт, зелень - эвкалипт, упаковка - крафт",
+        "CODE": "COMPOSITION"
+      }
+    },
+    "PRICES": [
+      {
+        "PRODUCT_ID": "999001",
+        "CATALOG_GROUP_ID": "1",
+        "PRICE": "15000.00",
+        "CURRENCY": "KZT",
+        "QUANTITY_FROM": "1",
+        "QUANTITY_TO": null
+      }
+    ],
+    "webhook_timestamp": "2025-08-21T16:30:00",
+    "webhook_source": "test_product_sync"
+  }
+}

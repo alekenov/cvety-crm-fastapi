@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Редактирование товара - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">✏️ Редактирование товара</h2>
+    <a href="/crm/products" class="btn btn-secondary">← Назад к списку</a>
+</div>
+
+<div style="max-width: 800px; margin: 0 auto;">
+    <div class="card">
+        <div class="card-header">
+            <h3>📝 Основная информация</h3>
+        </div>
+        <div class="card-body">
+            <form method="post" action="/crm/products/{{ product.id }}/edit">
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                        Название товара *
+                    </label>
+                    <input type="text" 
+                           id="name" 
+                           name="name" 
+                           value="{{ product.name }}" 
+                           required
+                           style="width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 1rem;">
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div>
+                        <label for="price" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                            Цена (₸) *
+                        </label>
+                        <input type="number" 
+                               id="price" 
+                               name="price" 
+                               value="{{ product.price }}" 
+                               min="0" 
+                               step="0.01"
+                               required
+                               style="width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 1rem;">
+                    </div>
+                    
+                    <div>
+                        <label for="quantity" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                            Количество *
+                        </label>
+                        <input type="number" 
+                               id="quantity" 
+                               name="quantity" 
+                               value="{{ product.quantity }}" 
+                               min="0"
+                               required
+                               style="width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 1rem;">
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                        🌸 Состав букета
+                    </label>
+                    
+                    <!-- Flower search and add -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <input type="text" 
+                               id="flowerSearch" 
+                               placeholder="Начните вводить название цветка..."
+                               style="flex: 1; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                        <input type="number" 
+                               id="flowerAmount" 
+                               placeholder="Кол-во"
+                               min="1"
+                               value="1"
+                               style="width: 100px; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                        <button type="button" 
+                                id="addFlowerBtn"
+                                class="btn btn-primary"
+                                style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            ➕ Добавить
+                        </button>
+                    </div>
+                    
+                    <!-- Flower suggestions dropdown -->
+                    <div id="flowerSuggestions" 
+                         style="position: relative; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 5px; display: none; margin-bottom: 15px;">
+                    </div>
+                    
+                    <!-- Selected flowers list -->
+                    <div id="selectedFlowers" style="min-height: 50px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                        <div id="loadingComposition" style="color: #666; text-align: center;">Загрузка состава...</div>
+                    </div>
+                    
+                    <!-- Hidden input to store composition JSON -->
+                    <input type="hidden" id="compositionData" name="composition_data" value="[]">
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label for="description" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                        Описание
+                    </label>
+                    <textarea id="description" 
+                              name="description" 
+                              rows="4"
+                              placeholder="Дополнительное описание товара"
+                              style="width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 1rem;">{{ product.description or '' }}</textarea>
+                </div>
+                
+                <div style="margin-bottom: 2rem;">
+                    <label style="display: flex; align-items: center; font-weight: 600; cursor: pointer;">
+                        <input type="checkbox" 
+                               name="is_active" 
+                               value="true"
+                               {% if product.is_active %}checked{% endif %}
+                               style="margin-right: 0.5rem; transform: scale(1.2);">
+                        Товар активен (отображается в каталоге)
+                    </label>
+                </div>
+                
+                <div style="border-top: 1px solid #dee2e6; padding-top: 1.5rem;">
+                    <button type="submit" class="btn btn-success" style="margin-right: 1rem;">
+                        ✅ Сохранить изменения
+                    </button>
+                    <a href="/crm/products" class="btn btn-secondary">
+                        ❌ Отменить
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Product Info -->
+    <div class="card" style="margin-top: 2rem;">
+        <div class="card-header">
+            <h3>📊 Дополнительная информация</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <strong>ID товара:</strong><br>
+                    <code>{{ product.id }}</code>
+                </div>
+                <div>
+                    <strong>Slug:</strong><br>
+                    {{ product.slug or 'Не указан' }}
+                </div>
+                {% if product.category_id %}
+                <div>
+                    <strong>Категория:</strong><br>
+                    {{ product.category_id }}
+                </div>
+                {% endif %}
+                <div>
+                    <strong>Дата создания:</strong><br>
+                    {{ product.created_at[:16].replace('T', ' ') if product.created_at else 'Не указана' }}
+                </div>
+            </div>
+            
+            {% if composition %}
+            <div style="margin-top: 1.5rem;">
+                <strong>🌸 Текущий состав букета:</strong><br>
+                <div style="background: #e8f5e9; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+                    {% for item in composition %}
+                    <div style="padding: 3px 0; font-size: 1.1rem;">
+                        • {{ item.amount }} × {{ item.flower_name or item.flowers.name }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif product.composition %}
+            <div style="margin-top: 1.5rem;">
+                <strong>🌸 Состав букета (текст):</strong><br>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+                    {{ product.composition }}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if product.description %}
+            <div style="margin-top: 1.5rem;">
+                <strong>📝 Описание:</strong><br>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+                    {{ product.description }}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if product.images %}
+            <div style="margin-top: 1.5rem;">
+                <strong>Изображения:</strong><br>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    {% for image in product.images %}
+                    <img src="{{ image }}" 
+                         alt="Product image" 
+                         style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #dee2e6;">
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if product.attributes %}
+            <div style="margin-top: 1.5rem;">
+                <strong>Атрибуты:</strong><br>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+                    <pre style="margin: 0; font-size: 0.875rem;">{{ product.attributes | tojson(indent=2) }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Flower composition management for edit page
+let selectedFlowers = [];
+let flowerDictionary = [];
+let selectedFlowerId = null;
+const productId = '{{ product.id }}';
+
+// Load flower dictionary and existing composition on page load
+async function loadFlowersAndComposition() {
+    try {
+        // Load flower dictionary
+        const flowersResponse = await fetch('/api/flowers');
+        if (flowersResponse.ok) {
+            flowerDictionary = await flowersResponse.json();
+        }
+        
+        // Load existing composition
+        const compositionResponse = await fetch(`/api/products/${productId}/composition`);
+        if (compositionResponse.ok) {
+            const composition = await compositionResponse.json();
+            selectedFlowers = composition.map(item => ({
+                flower_id: item.flower_id,
+                flower_name: item.flower_name || (item.flowers ? item.flowers.name : 'Неизвестный цветок'),
+                amount: item.amount
+            }));
+            updateSelectedFlowersDisplay();
+        } else {
+            const loadingElement = document.getElementById('loadingComposition');
+            if (loadingElement) {
+                loadingElement.innerHTML = 'Состав букета пока не указан';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading data:', error);
+        const loadingElement = document.getElementById('loadingComposition');
+        if (loadingElement) {
+            loadingElement.innerHTML = 'Ошибка загрузки состава: ' + error.message;
+        }
+    }
+}
+
+// Initialize on page load
+loadFlowersAndComposition();
+
+// Flower search functionality
+const flowerSearchInput = document.getElementById('flowerSearch');
+const flowerSuggestions = document.getElementById('flowerSuggestions');
+const flowerAmountInput = document.getElementById('flowerAmount');
+const addFlowerBtn = document.getElementById('addFlowerBtn');
+
+flowerSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    
+    if (query.length < 2) {
+        flowerSuggestions.style.display = 'none';
+        selectedFlowerId = null;
+        return;
+    }
+    
+    // Search in loaded dictionary
+    const matches = flowerDictionary.filter(flower => 
+        flower.name.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    if (matches.length > 0) {
+        flowerSuggestions.innerHTML = matches.map(flower => `
+            <div class="flower-suggestion" 
+                 data-id="${flower.id}" 
+                 data-name="${flower.name}"
+                 style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+                🌸 ${flower.name}
+            </div>
+        `).join('');
+        flowerSuggestions.style.display = 'block';
+        
+        // Add click handlers to suggestions
+        document.querySelectorAll('.flower-suggestion').forEach(item => {
+            item.addEventListener('click', () => {
+                selectedFlowerId = item.dataset.id;
+                flowerSearchInput.value = item.dataset.name;
+                flowerSuggestions.style.display = 'none';
+                flowerAmountInput.focus();
+            });
+            
+            item.addEventListener('mouseenter', () => {
+                item.style.background = '#e8f5e9';
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                item.style.background = 'white';
+            });
+        });
+    } else {
+        flowerSuggestions.innerHTML = '<div style="padding: 10px; color: #666;">Цветы не найдены</div>';
+        flowerSuggestions.style.display = 'block';
+    }
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    if (!flowerSearchInput.contains(e.target) && !flowerSuggestions.contains(e.target)) {
+        flowerSuggestions.style.display = 'none';
+    }
+});
+
+// Add flower to composition
+addFlowerBtn.addEventListener('click', () => {
+    if (!selectedFlowerId) {
+        alert('Выберите цветок из списка');
+        return;
+    }
+    
+    const amount = parseInt(flowerAmountInput.value);
+    if (!amount || amount < 1) {
+        alert('Укажите количество цветов');
+        return;
+    }
+    
+    // Check if flower already exists
+    const existingIndex = selectedFlowers.findIndex(f => f.flower_id === selectedFlowerId);
+    
+    if (existingIndex >= 0) {
+        // Update amount
+        selectedFlowers[existingIndex].amount += amount;
+    } else {
+        // Add new flower
+        const flower = flowerDictionary.find(f => f.id === selectedFlowerId);
+        selectedFlowers.push({
+            flower_id: selectedFlowerId,
+            flower_name: flower.name,
+            amount: amount
+        });
+    }
+    
+    // Update display
+    updateSelectedFlowersDisplay();
+    
+    // Clear inputs
+    flowerSearchInput.value = '';
+    flowerAmountInput.value = '1';
+    selectedFlowerId = null;
+    flowerSearchInput.focus();
+});
+
+// Update selected flowers display
+function updateSelectedFlowersDisplay() {
+    const container = document.getElementById('selectedFlowers');
+    
+    if (selectedFlowers.length === 0) {
+        container.innerHTML = '<div id="noFlowersMessage" style="color: #666; text-align: center;">Состав букета пока не указан</div>';
+    } else {
+        container.innerHTML = selectedFlowers.map((item, index) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 5px; background: white; border-radius: 5px; border: 1px solid #ddd;">
+                <span>🌸 ${item.amount} × ${item.flower_name}</span>
+                <button type="button" 
+                        onclick="removeFlower(${index})"
+                        style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
+                    ✖
+                </button>
+            </div>
+        `).join('');
+    }
+    
+    // Update hidden input
+    document.getElementById('compositionData').value = JSON.stringify(selectedFlowers);
+}
+
+// Remove flower from composition
+function removeFlower(index) {
+    selectedFlowers.splice(index, 1);
+    updateSelectedFlowersDisplay();
+}
+
+// Handle Enter key in amount field
+flowerAmountInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addFlowerBtn.click();
+    }
+});
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const name = document.getElementById('name').value.trim();
+    const price = parseFloat(document.getElementById('price').value);
+    const quantity = parseInt(document.getElementById('quantity').value);
+    
+    if (!name) {
+        alert('Название товара обязательно для заполнения');
+        e.preventDefault();
+        return;
+    }
+    
+    if (isNaN(price) || price < 0) {
+        alert('Цена должна быть положительным числом');
+        e.preventDefault();
+        return;
+    }
+    
+    if (isNaN(quantity) || quantity < 0) {
+        alert('Количество должно быть положительным числом');
+        e.preventDefault();
+        return;
+    }
+});
+</script>
+{% endblock %}

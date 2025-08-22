@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% block title %}Заказ {{ order.order_number or ('#' + order.id[:8]) }} - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">
+        📦 Заказ {{ order.order_number or ('#' + order.id[:8]) }}
+    </h2>
+    <a href="/crm/orders" class="btn btn-secondary">← Назад к списку</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+    
+    <!-- Order Information -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📋 Информация о заказе</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <strong>Статус:</strong><br>
+                    <span class="status status-{{ order.status }}" style="margin-top: 0.5rem; display: inline-block;">
+                        {{ order_statuses.get(order.status, order.status) }}
+                    </span>
+                </div>
+                <div>
+                    <strong>Дата создания:</strong><br>
+                    {{ order.created_at[:16].replace('T', ' ') }}
+                </div>
+                
+                <!-- Customer information -->
+                {% if customer %}
+                <div>
+                    <strong>👤 Заказчик:</strong><br>
+                    {{ customer.name if customer.name != 'Unknown' else 'Не указан' }}
+                    {% if customer.email and '@cvety.kz' not in customer.email %}
+                    <br><small style="color: #6c757d;">📧 {{ customer.email }}</small>
+                    {% endif %}
+                    {% if customer.phone %}
+                    <br><small style="color: #6c757d;">📞 {{ customer.phone }}</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Responsible florist with selection -->
+                <div>
+                    <strong>👨‍🌺 Ответственный флорист:</strong><br>
+                    
+                    <div id="florist-display" style="margin: 8px 0;">
+                        {% if florist %}
+                            <span id="current-florist">{{ florist.name or florist.email or 'Флорист' }}</span>
+                            {% if florist.phone %}
+                            <br><small style="color: #28a745;">📞 {{ florist.phone }}</small>
+                            {% endif %}
+                            {% if florist.role %}
+                            <br><small style="color: #6c757d;">{{ florist.role }}</small>
+                            {% endif %}
+                        {% elif order.responsible_id %}
+                            <span id="current-florist" style="color: #6c757d;">ID: {{ order.responsible_id }}</span>
+                        {% else %}
+                            <span id="current-florist" style="color: #6c757d;">Не назначен</span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Florist selection form -->
+                    <form id="florist-form" style="display: none; margin-top: 10px;">
+                        <select id="florist-select" style="width: 100%; padding: 8px; margin-bottom: 10px;">
+                            <option value="">Загрузка флористов...</option>
+                        </select>
+                        <div>
+                            <button type="submit" class="btn btn-sm btn-success">Назначить</button>
+                            <button type="button" id="cancel-florist" class="btn btn-sm btn-secondary" style="margin-left: 5px;">Отмена</button>
+                        </div>
+                    </form>
+                    
+                    <button id="change-florist-btn" class="btn btn-sm btn-outline-primary" style="margin-top: 5px;">
+                        {{ 'Изменить флориста' if florist else 'Назначить флориста' }}
+                    </button>
+                </div>
+                
+                <div>
+                    <strong>📦 Получатель:</strong><br>
+                    {{ order.recipient_name or 'Не указан' }}
+                    {% if customer and order.recipient_name == customer.name %}
+                    <br><small style="color: #28a745;">✅ Получает сам заказчик</small>
+                    {% endif %}
+                </div>
+                <div>
+                    <strong>Телефон получателя:</strong><br>
+                    {% if order.recipient_phone %}
+                    <a href="tel:{{ order.recipient_phone }}">{{ order.recipient_phone }}</a>
+                    {% else %}
+                    <span style="color: #6c757d;">Не указан</span>
+                    {% endif %}
+                </div>
+                <div style="grid-column: span 2;">
+                    <strong>Адрес доставки:</strong><br>
+                    {{ order.delivery_address }}
+                </div>
+                {% if order.delivery_date %}
+                <div>
+                    <strong>Дата доставки:</strong><br>
+                    {{ order.delivery_date }}
+                </div>
+                {% endif %}
+                {% if order.delivery_time %}
+                <div>
+                    <strong>Время доставки:</strong><br>
+                    {{ order.delivery_time }}
+                </div>
+                {% endif %}
+                <div>
+                    <strong>Способ оплаты:</strong><br>
+                    {{ payment_methods.get(payment_method, payment_method) }}
+                </div>
+                <div>
+                    <strong>Статус оплаты:</strong><br>
+                    <span class="status status-{{ order.payment_status }}">
+                        {{ order.payment_status or 'pending' }}
+                    </span>
+                </div>
+                {% if order.source %}
+                <div>
+                    <strong>Источник заказа:</strong><br>
+                    {{ order.source }}
+                </div>
+                {% endif %}
+                {% if order.completed_at %}
+                <div>
+                    <strong>Дата выполнения:</strong><br>
+                    {{ order.completed_at[:16].replace('T', ' ') }}
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if order.comment %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
+                <strong>💬 Комментарий:</strong><br>
+                {{ order.comment }}
+            </div>
+            {% endif %}
+            
+            {% if order.postcard_text %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #fff3cd; border-radius: 6px;">
+                <strong>💌 Текст открытки:</strong><br>
+                {{ order.postcard_text }}
+            </div>
+            {% endif %}
+            
+            {% if order.courier_comment %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #e3f2fd; border-radius: 6px;">
+                <strong>🚚 Комментарий курьера:</strong><br>
+                {{ order.courier_comment }}
+            </div>
+            {% endif %}
+            
+            {% if order.delivery_coordinates %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f3e5f5; border-radius: 6px;">
+                <strong>📍 Координаты доставки:</strong><br>
+                {% if order.delivery_coordinates.lat and order.delivery_coordinates.lng %}
+                    Широта: {{ order.delivery_coordinates.lat }}<br>
+                    Долгота: {{ order.delivery_coordinates.lng }}
+                    <br><small><a href="https://maps.google.com/maps?q={{ order.delivery_coordinates.lat }},{{ order.delivery_coordinates.lng }}" target="_blank">🗺️ Открыть на карте</a></small>
+                {% else %}
+                    {{ order.delivery_coordinates }}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Status Management -->
+    <div class="card">
+        <div class="card-header">
+            <h3>⚙️ Управление статусом</h3>
+        </div>
+        <div class="card-body">
+            <!-- Quick action buttons for common status changes -->
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin-bottom: 1rem;">Быстрые действия:</h4>
+                <div style="display: grid; gap: 0.5rem;">
+                    {% if order.status == 'N' or order.status == 'new' %}
+                    <form method="post" action="/crm/orders/{{ order.id }}/status" style="display: inline;">
+                        <input type="hidden" name="status" value="CO">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            📦 Отметить собранным
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    {% if order.status == 'CO' %}
+                    <form method="post" action="/crm/orders/{{ order.id }}/status" style="display: inline;">
+                        <input type="hidden" name="status" value="TR">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            🚚 Передать курьеру
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    {% if order.status in ['TR', 'DE', 'CO'] %}
+                    <form method="post" action="/crm/orders/{{ order.id }}/status" style="display: inline;">
+                        <input type="hidden" name="status" value="F">
+                        <button type="submit" class="btn btn-success" style="width: 100%;">
+                            ✅ Завершить заказ
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    {% if order.status not in ['F', 'UN', 'RF'] %}
+                    <form method="post" action="/crm/orders/{{ order.id }}/status" style="display: inline;">
+                        <input type="hidden" name="status" value="RD">
+                        <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                            📅 Перенести заказ
+                        </button>
+                    </form>
+                    <form method="post" action="/crm/orders/{{ order.id }}/status" style="display: inline;">
+                        <input type="hidden" name="status" value="UN">
+                        <button type="submit" class="btn btn-danger" style="width: 100%;" 
+                                onclick="return confirm('Вы уверены, что хотите отменить заказ?')">
+                            ❌ Отменить заказ
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Full status selector -->
+            <form method="post" action="/crm/orders/{{ order.id }}/status">
+                <div style="margin-bottom: 1rem;">
+                    <label for="status" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                        Все статусы:
+                    </label>
+                    <select name="status" id="status" style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                        {% for status_key, status_name in order_statuses.items() %}
+                        <option value="{{ status_key }}" 
+                                {% if order.status == status_key %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                    🔄 Изменить статус
+                </button>
+            </form>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; font-size: 0.875rem;">
+                <strong>💰 Финансы:</strong><br>
+                {% if order.subtotal %}Подытог: {{ "%.0f"|format(order.subtotal) }} ₸<br>{% endif %}
+                {% if order.delivery_cost and order.delivery_cost > 0 %}Доставка: {{ "%.0f"|format(order.delivery_cost) }} ₸<br>{% endif %}
+                {% if order.discount and order.discount > 0 %}Скидка: -{{ "%.0f"|format(order.discount) }} ₸<br>{% endif %}
+                <strong>Итого: {{ "%.0f"|format(order.total_amount) }} ₸</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order Items -->
+{% if items %}
+<div class="card">
+    <div class="card-header">
+        <h3>🛍️ Товары в заказе</h3>
+    </div>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60px;">Фото</th>
+                    <th>Товар</th>
+                    <th>Количество</th>
+                    <th>Цена за единицу</th>
+                    <th>Общая стоимость</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td style="padding: 8px;">
+                        {% if item.product_image %}
+                        <img src="{{ item.product_image }}" 
+                             alt="{{ item.product_name }}" 
+                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">
+                        {% else %}
+                        <div style="width: 50px; height: 50px; background: #f8f9fa; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #6c757d; font-size: 12px;">
+                            📦
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ item.product_name }}</strong>
+                        {% if item.product_id %}
+                        <br><small style="color: #6c757d;">ID: {{ item.product_id[:8] }}...</small>
+                        {% endif %}
+                        {% if item.product_snapshot and item.product_snapshot.get('sku') %}
+                        <br><small style="color: #6c757d;">Артикул: {{ item.product_snapshot.sku }}</small>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ "%.0f"|format(item.price) }} ₸</td>
+                    <td><strong>{{ "%.0f"|format(item.price * item.quantity) }} ₸</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background: #f8f9fa; font-weight: bold;">
+                    <td colspan="3">Общая сумма:</td>
+                    <td><strong>{{ "%.0f"|format(order.total_amount) }} ₸</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 2rem;">
+        <p style="color: #6c757d;">📦 Товары в заказе не найдены</p>
+    </div>
+</div>
+{% endif %}
+
+<div style="margin-top: 2rem;">
+    <a href="/crm/orders" class="btn btn-secondary">← Вернуться к списку заказов</a>
+</div>
+
+<script>
+// Florist management functionality
+let florists = [];
+let currentOrderId = '{{ order.id }}';
+
+// Load florists from API
+async function loadFlorists() {
+    try {
+        const response = await fetch('/api/florists');
+        const data = await response.json();
+        florists = data.florists;
+        
+        const select = document.getElementById('florist-select');
+        select.innerHTML = '<option value="">-- Выберите флориста --</option>';
+        
+        florists.forEach(florist => {
+            const option = document.createElement('option');
+            option.value = florist.id;
+            option.textContent = `${florist.name} (${florist.role})`;
+            if (!florist.is_active) {
+                option.style.color = '#6c757d';
+                option.textContent += ' [неактивен]';
+            }
+            select.appendChild(option);
+        });
+        
+        console.log(`Loaded ${florists.length} florists`);
+        
+    } catch (error) {
+        console.error('Failed to load florists:', error);
+        document.getElementById('florist-select').innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+}
+
+// Show florist selection form
+document.getElementById('change-florist-btn').addEventListener('click', function() {
+    const form = document.getElementById('florist-form');
+    const btn = this;
+    
+    if (florists.length === 0) {
+        loadFlorists();
+    }
+    
+    form.style.display = 'block';
+    btn.style.display = 'none';
+});
+
+// Cancel florist selection
+document.getElementById('cancel-florist').addEventListener('click', function() {
+    document.getElementById('florist-form').style.display = 'none';
+    document.getElementById('change-florist-btn').style.display = 'inline-block';
+});
+
+// Assign florist
+document.getElementById('florist-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const floristId = document.getElementById('florist-select').value;
+    if (!floristId) {
+        alert('Пожалуйста, выберите флориста');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('florist_id', floristId);
+        
+        const response = await fetch(`/api/orders/${currentOrderId}/assign-florist`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Update display
+            const florist = florists.find(f => f.id === floristId);
+            let displayText = data.florist.name;
+            if (florist.phone) displayText += `<br><small style="color: #28a745;">📞 ${florist.phone}</small>`;
+            if (data.florist.role) displayText += `<br><small style="color: #6c757d;">${data.florist.role}</small>`;
+            
+            document.getElementById('current-florist').innerHTML = displayText;
+            
+            // Hide form and show button
+            document.getElementById('florist-form').style.display = 'none';
+            const btn = document.getElementById('change-florist-btn');
+            btn.textContent = 'Изменить флориста';
+            btn.style.display = 'inline-block';
+            
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success';
+            successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1000; max-width: 300px;';
+            successMsg.textContent = `✅ Флорист ${data.florist.name} успешно назначен`;
+            document.body.appendChild(successMsg);
+            
+            setTimeout(() => successMsg.remove(), 3000);
+            
+        } else {
+            const error = await response.json();
+            alert(`Ошибка: ${error.detail || 'Не удалось назначить флориста'}`);
+        }
+        
+    } catch (error) {
+        console.error('Failed to assign florist:', error);
+        alert('Ошибка сети. Попробуйте снова.');
+    }
+});
+
+// Auto-refresh order status every 30 seconds (but slower to avoid interrupting florist selection)
+setTimeout(function() {
+    if (document.getElementById('florist-form').style.display === 'none') {
+        location.reload();
+    }
+}, 60000); // Увеличили до 1 минуты
+</script>
+{% endblock %}

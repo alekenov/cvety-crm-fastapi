@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">
+        🌸 {{ product.name }}
+    </h2>
+    <a href="/crm/products" class="btn btn-secondary">← Назад к списку</a>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; margin-bottom: 2rem;">
+    
+    <!-- Product Image -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📷 Изображение</h3>
+        </div>
+        <div class="card-body" style="text-align: center;">
+            {% set image_url = product.get('metadata', {}).get('properties', {}).get('ru_img_miniature') %}
+            {% if image_url %}
+            <img src="https://cvety.kz{{ image_url }}" 
+                 alt="{{ product.name }}" 
+                 style="max-width: 100%; max-height: 400px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+            {% else %}
+            <div style="width: 100%; height: 300px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6c757d; font-size: 3rem;">
+                🌸
+            </div>
+            <p style="color: #6c757d; margin-top: 1rem;">Изображение не загружено</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Product Information -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📋 Информация о товаре</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div>
+                    <strong>Цена:</strong><br>
+                    {% if product.old_price and product.old_price > product.price %}
+                    <span style="text-decoration: line-through; color: #6c757d; font-size: 0.9rem;">
+                        {{ "%.0f"|format(product.old_price) }} ₸
+                    </span><br>
+                    {% endif %}
+                    <span style="font-size: 1.5rem; font-weight: bold; color: #27ae60;">
+                        {{ "%.0f"|format(product.price) }} ₸
+                    </span>
+                </div>
+                <div>
+                    <strong>Статус:</strong><br>
+                    {% if product.is_active %}
+                    <span class="status" style="background: #d4edda; color: #155724;">✅ Активен</span>
+                    {% else %}
+                    <span class="status" style="background: #f8d7da; color: #721c24;">❌ Неактивен</span>
+                    {% endif %}
+                </div>
+                <div>
+                    <strong>ID товара:</strong><br>
+                    <small style="font-family: monospace; background: #f8f9fa; padding: 4px 8px; border-radius: 4px;">
+                        {{ product.id }}
+                    </small>
+                </div>
+                {% if product.sku %}
+                <div>
+                    <strong>Артикул:</strong><br>
+                    <span style="font-family: monospace; background: #e3f2fd; padding: 4px 8px; border-radius: 4px;">
+                        {{ product.sku }}
+                    </span>
+                </div>
+                {% endif %}
+                {% if product.slug %}
+                <div>
+                    <strong>URL-слаг:</strong><br>
+                    <span style="font-family: monospace; color: #6c757d;">
+                        {{ product.slug }}
+                    </span>
+                </div>
+                {% endif %}
+                {% if product.category_id %}
+                <div>
+                    <strong>ID категории:</strong><br>
+                    <span style="color: #6c757d;">{{ product.category_id }}</span>
+                </div>
+                {% endif %}
+                {% if seller %}
+                <div>
+                    <strong>Поставщик:</strong><br>
+                    {{ seller.name or seller.id }}
+                </div>
+                {% elif product.seller_id %}
+                <div>
+                    <strong>ID поставщика:</strong><br>
+                    <span style="color: #6c757d;">{{ product.seller_id }}</span>
+                </div>
+                {% endif %}
+                {% if product.created_at %}
+                <div>
+                    <strong>Дата создания:</strong><br>
+                    {{ product.created_at[:16].replace('T', ' ') }}
+                </div>
+                {% endif %}
+                {% if product.updated_at %}
+                <div>
+                    <strong>Последнее обновление:</strong><br>
+                    {{ product.updated_at[:16].replace('T', ' ') }}
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if composition %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-radius: 6px;">
+                <strong>🌸 Состав букета:</strong><br>
+                <div style="margin-top: 0.5rem; line-height: 1.8;">
+                    {% for item in composition %}
+                    <div style="padding: 3px 0; font-size: 1.1rem;">
+                        • {{ item.amount }} × {{ item.flower_name }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif product.composition %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-radius: 6px;">
+                <strong>🌸 Состав букета:</strong><br>
+                <div style="margin-top: 0.5rem; line-height: 1.5; font-size: 1.1rem;">
+                    {{ product.composition }}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if product.description %}
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
+                <strong>📝 Описание:</strong><br>
+                <div style="margin-top: 0.5rem; line-height: 1.5;">
+                    {{ product.description }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Metadata and Technical Info -->
+{% if product.metadata %}
+<div class="card">
+    <div class="card-header">
+        <h3>🔧 Техническая информация</h3>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+            {% if product.metadata.get('properties') %}
+            <div>
+                <strong>📋 Свойства товара:</strong>
+                <div style="margin-top: 0.5rem; background: #f8f9fa; padding: 0.75rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto;">
+                    {% for key, value in product.metadata.properties.items() %}
+                    <div><strong>{{ key }}:</strong> {{ value }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if product.attributes %}
+            <div>
+                <strong>🏷️ Атрибуты:</strong>
+                <div style="margin-top: 0.5rem; background: #e3f2fd; padding: 0.75rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto;">
+                    {% for key, value in product.attributes.items() %}
+                    <div><strong>{{ key }}:</strong> {{ value }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div>
+                <strong>⚙️ Полные метаданные:</strong>
+                <div style="margin-top: 0.5rem; background: #fff3cd; padding: 0.75rem; border-radius: 4px; font-family: monospace; font-size: 0.75rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">{{ product.metadata | tojson(indent=2) }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div style="margin-top: 2rem; text-align: center;">
+    <a href="/crm/products/{{ product.id }}/edit" class="btn btn-primary" style="margin-right: 1rem;">
+        ✏️ Редактировать товар
+    </a>
+    <a href="/crm/products" class="btn btn-secondary">
+        ← Вернуться к списку товаров
+    </a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,652 @@
+{% extends "base.html" %}
+{% block title %}Управление складом - CRM{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h2 style="color: #2c3e50;">📦 Управление складом ({{ total }})</h2>
+    <div>
+        <button id="addDeliveryBtn" class="btn btn-success">📦 Добавить поставку</button>
+        <button id="writeoffBtn" class="btn btn-danger">🗑️ Списать товар</button>
+        <button id="bulkUpdateBtn" class="btn btn-primary" disabled>📊 Массовое обновление</button>
+        <button id="historyBtn" class="btn btn-secondary">📋 История движений</button>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card" style="border-left: 4px solid #17a2b8;">
+        <div class="stat-number">{{ stats.total }}</div>
+        <div class="stat-label">Всего видов цветов</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+    <form method="get">
+        <input type="text" 
+               name="search" 
+               placeholder="Поиск по названию цветка" 
+               value="{{ search_term or '' }}"
+               style="min-width: 300px;">
+        
+        <button type="submit" class="btn btn-primary">🔍 Найти</button>
+        
+        {% if search_term %}
+        <a href="/crm/inventory" class="btn btn-secondary">✖ Сбросить</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if flowers %}
+<div class="card">
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="selectAll">
+                    </th>
+                    <th>Название цветка</th>
+                    <th>Английское название</th>
+                    <th>Текущий остаток</th>
+                    <th>Новое количество</th>
+                    <th>Статус</th>
+                    <th>Обновлено</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for flower in flowers %}
+                <tr class="inventory-row" data-flower-id="{{ flower.id }}">
+                    <td>
+                        <input type="checkbox" class="flower-checkbox" value="{{ flower.id }}">
+                    </td>
+                    <td>
+                        <div style="font-weight: 600;">{{ flower.name }}</div>
+                        <div style="font-size: 0.8rem; color: #6c757d;">XML ID: {{ flower.xml_id }}</div>
+                    </td>
+                    <td>
+                        <span style="color: #6c757d;">{{ flower.name_en or '-' }}</span>
+                    </td>
+                    <td>
+                        <span class="quantity-current" 
+                              style="padding: 4px 12px; border-radius: 20px; font-weight: 600; 
+                              {% if flower.quantity == 0 %}background: #f8d7da; color: #721c24;{% elif flower.quantity <= 10 %}background: #fff3cd; color: #856404;{% else %}background: #d4edda; color: #155724;{% endif %}">
+                            {{ flower.quantity or 0 }}
+                        </span>
+                    </td>
+                    <td>
+                        <input type="number" 
+                               class="quantity-input" 
+                               value="{{ flower.quantity or 0 }}" 
+                               min="0" 
+                               data-flower-id="{{ flower.id }}"
+                               style="width: 80px; padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                    </td>
+                    <td>
+                        {% if flower.is_active %}
+                        <span style="color: #28a745; font-weight: 600;">✅ Активен</span>
+                        {% else %}
+                        <span style="color: #6c757d;">❌ Неактивен</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if flower.updated_at %}
+                        <span style="font-size: 0.85rem;">
+                            {{ flower.updated_at[:10] }}
+                        </span>
+                        {% else %}
+                        <span style="color: #6c757d;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-primary update-single" 
+                                data-flower-id="{{ flower.id }}" 
+                                style="padding: 4px 8px; font-size: 0.8rem;">
+                            💾 Сохранить
+                        </button>
+                        <a href="/crm/flowers/{{ flower.id }}" 
+                           class="btn btn-secondary" 
+                           style="padding: 4px 8px; font-size: 0.8rem; margin-left: 4px;">
+                            👁️ Открыть
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}{% if current_filter != 'all' %}&filter_stock={{ current_filter }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn btn-secondary">← Назад</a>
+    {% endif %}
+    
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% else %}
+        <a href="?page={{ p }}{% if current_filter != 'all' %}&filter_stock={{ current_filter }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+    
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}{% if current_filter != 'all' %}&filter_stock={{ current_filter }}{% endif %}{% if search_term %}&search={{ search_term }}{% endif %}" class="btn btn-secondary">Вперед →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 3rem;">
+        <h3 style="color: #6c757d; margin-bottom: 1rem;">📦 Товары не найдены</h3>
+        <p style="color: #6c757d;">
+            {% if search_term %}
+            По запросу "{{ search_term }}" ничего не найдено.
+            {% elif current_filter != 'all' %}
+            В категории "{{ current_filter }}" товары отсутствуют.
+            {% else %}
+            В системе пока нет товаров.
+            {% endif %}
+        </p>
+        {% if search_term or current_filter != 'all' %}
+        <a href="/crm/inventory" class="btn btn-primary">Показать все товары</a>
+        {% else %}
+        <a href="/crm/products/new" class="btn btn-success">➕ Добавить первый товар</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Delivery Modal -->
+<div id="deliveryModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 8px; width: 500px; max-width: 90vw;">
+        <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">📦 Добавить поставку товара</h3>
+        
+        <form id="deliveryForm">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Товар:</label>
+                <select id="deliveryFlowerSelect" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                    <option value="">Выберите товар...</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Количество:</label>
+                <input type="number" id="deliveryQuantity" min="1" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Дата поставки:</label>
+                <input type="date" id="deliveryDate" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Примечание:</label>
+                <textarea id="deliveryNote" rows="3" placeholder="Дополнительная информация..." style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" id="cancelDelivery" class="btn btn-secondary">Отмена</button>
+                <button type="submit" class="btn btn-success">📦 Добавить поставку</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Writeoff Modal -->
+<div id="writeoffModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 8px; width: 500px; max-width: 90vw;">
+        <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">🗑️ Списать товар со склада</h3>
+        
+        <form id="writeoffForm">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Товар:</label>
+                <select id="writeoffFlowerSelect" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                    <option value="">Выберите товар...</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Количество для списания:</label>
+                <input type="number" id="writeoffQuantity" min="1" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                <div id="availableQuantity" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;"></div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Дата списания:</label>
+                <input type="date" id="writeoffDate" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Причина списания:</label>
+                <select id="writeoffReason" required style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;">
+                    <option value="Брак">Брак</option>
+                    <option value="Порча">Порча</option>
+                    <option value="Истек срок">Истек срок</option>
+                    <option value="Потеря">Потеря</option>
+                    <option value="Другое">Другое</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Примечание:</label>
+                <textarea id="writeoffNote" rows="3" placeholder="Дополнительная информация..." style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" id="cancelWriteoff" class="btn btn-secondary">Отмена</button>
+                <button type="submit" class="btn btn-danger">🗑️ Списать товар</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div id="historyModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 8px; width: 800px; max-width: 90vw; height: 600px; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="color: #2c3e50;">📋 История движения товаров</h3>
+            <button id="closeHistory" class="btn btn-secondary">✖ Закрыть</button>
+        </div>
+        
+        <div id="historyContent" style="min-height: 400px;">
+            <div style="text-align: center; padding: 2rem; color: #6c757d;">
+                Загрузка истории...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const flowerCheckboxes = document.querySelectorAll('.flower-checkbox');
+    const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
+    
+    // Select all functionality
+    selectAll.addEventListener('change', function() {
+        flowerCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateBulkButtonState();
+    });
+    
+    // Individual checkbox listeners
+    flowerCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkButtonState);
+    });
+    
+    function updateBulkButtonState() {
+        const checkedCount = document.querySelectorAll('.flower-checkbox:checked').length;
+        bulkUpdateBtn.disabled = checkedCount === 0;
+        bulkUpdateBtn.textContent = checkedCount > 0 ? `📊 Обновить (${checkedCount})` : '📊 Массовое обновление';
+    }
+    
+    // Single product update
+    document.querySelectorAll('.update-single').forEach(button => {
+        button.addEventListener('click', function() {
+            const flowerId = this.dataset.flowerId;
+            const quantityInput = document.querySelector(`.quantity-input[data-flower-id="${flowerId}"]`);
+            const newQuantity = parseInt(quantityInput.value);
+            
+            updateFlowerQuantity(flowerId, newQuantity, this);
+        });
+    });
+    
+    // Bulk update
+    bulkUpdateBtn.addEventListener('click', function() {
+        const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+        const updates = [];
+        
+        checkedBoxes.forEach(checkbox => {
+            const productId = checkbox.value;
+            const quantityInput = document.querySelector(`.quantity-input[data-flower-id="${flowerId}"]`);
+            const newQuantity = parseInt(quantityInput.value);
+            
+            updates.push({
+                flower_id: flowerId,
+                quantity: newQuantity,
+                reason: 'Bulk update via inventory management'
+            });
+        });
+        
+        if (updates.length > 0) {
+            bulkUpdateQuantities(updates);
+        }
+    });
+    
+    function updateFlowerQuantity(flowerId, quantity, buttonElement) {
+        buttonElement.disabled = true;
+        buttonElement.textContent = '⏳ Сохранение...';
+        
+        fetch('/api/flowers/update-quantity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                flower_id: flowerId,
+                quantity: quantity,
+                reason: 'Manual update via inventory management'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update current quantity display
+                const currentSpan = buttonElement.closest('tr').querySelector('.quantity-current');
+                currentSpan.textContent = quantity;
+                currentSpan.className = 'quantity-current';
+                currentSpan.style.cssText += `padding: 4px 12px; border-radius: 20px; font-weight: 600; ${
+                    quantity === 0 ? 'background: #f8d7da; color: #721c24;' :
+                    quantity <= 5 ? 'background: #fff3cd; color: #856404;' :
+                    'background: #d4edda; color: #155724;'
+                }`;
+                
+                buttonElement.textContent = '✅ Сохранено';
+                setTimeout(() => {
+                    buttonElement.textContent = '💾 Сохранить';
+                    buttonElement.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(data.detail || 'Update failed');
+            }
+        })
+        .catch(error => {
+            console.error('Update error:', error);
+            buttonElement.textContent = '❌ Ошибка';
+            setTimeout(() => {
+                buttonElement.textContent = '💾 Сохранить';
+                buttonElement.disabled = false;
+            }, 2000);
+        });
+    }
+    
+    function bulkUpdateQuantities(updates) {
+        bulkUpdateBtn.disabled = true;
+        bulkUpdateBtn.textContent = '⏳ Обновление...';
+        
+        fetch('/api/inventory/bulk-update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                updates: updates
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update display for all successful updates
+                data.updated_products.forEach(product => {
+                    const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
+                    if (row) {
+                        const currentSpan = row.querySelector('.quantity-current');
+                        currentSpan.textContent = product.new_quantity;
+                        currentSpan.className = 'quantity-current';
+                        currentSpan.style.cssText += `padding: 4px 12px; border-radius: 20px; font-weight: 600; ${
+                            product.new_quantity === 0 ? 'background: #f8d7da; color: #721c24;' :
+                            product.new_quantity <= 5 ? 'background: #fff3cd; color: #856404;' :
+                            'background: #d4edda; color: #155724;'
+                        }`;
+                    }
+                });
+                
+                bulkUpdateBtn.textContent = `✅ Обновлено (${data.updated_count})`;
+                
+                // Clear selections
+                selectAll.checked = false;
+                productCheckboxes.forEach(checkbox => checkbox.checked = false);
+                
+                setTimeout(() => {
+                    updateBulkButtonState();
+                }, 3000);
+            } else {
+                throw new Error('Bulk update failed');
+            }
+        })
+        .catch(error => {
+            console.error('Bulk update error:', error);
+            bulkUpdateBtn.textContent = '❌ Ошибка';
+            setTimeout(() => {
+                updateBulkButtonState();
+            }, 2000);
+        });
+    }
+    
+    // Load flowers for modals
+    async function loadFlowersForModals() {
+        try {
+            const response = await fetch('/api/flowers/search?q=');
+            const flowers = await response.json();
+            
+            const deliverySelect = document.getElementById('deliveryFlowerSelect');
+            const writeoffSelect = document.getElementById('writeoffFlowerSelect');
+            
+            // Clear existing options
+            deliverySelect.innerHTML = '<option value="">Выберите цветок...</option>';
+            writeoffSelect.innerHTML = '<option value="">Выберите цветок...</option>';
+            
+            flowers.forEach(flower => {
+                const option1 = document.createElement('option');
+                option1.value = flower.id;
+                option1.textContent = `${flower.name} (остаток: ${flower.quantity || 0})`;
+                option1.dataset.quantity = flower.quantity || 0;
+                deliverySelect.appendChild(option1);
+                
+                const option2 = document.createElement('option');
+                option2.value = flower.id;
+                option2.textContent = `${flower.name} (остаток: ${flower.quantity || 0})`;
+                option2.dataset.quantity = flower.quantity || 0;
+                writeoffSelect.appendChild(option2);
+            });
+        } catch (error) {
+            console.error('Error loading flowers:', error);
+        }
+    }
+    
+    // Initialize modals
+    const addDeliveryBtn = document.getElementById('addDeliveryBtn');
+    const writeoffBtn = document.getElementById('writeoffBtn');
+    const historyBtn = document.getElementById('historyBtn');
+    
+    const deliveryModal = document.getElementById('deliveryModal');
+    const writeoffModal = document.getElementById('writeoffModal');
+    const historyModal = document.getElementById('historyModal');
+    
+    const deliveryForm = document.getElementById('deliveryForm');
+    const writeoffForm = document.getElementById('writeoffForm');
+    
+    // Set current date in ISO format "YYYY-MM-DD" 
+    const currentDate = new Date().toISOString().split('T')[0];
+    
+    // Modal open/close handlers
+    addDeliveryBtn.addEventListener('click', () => {
+        loadFlowersForModals();
+        document.getElementById('deliveryDate').value = currentDate;
+        deliveryModal.style.display = 'block';
+    });
+    
+    writeoffBtn.addEventListener('click', () => {
+        loadFlowersForModals();
+        document.getElementById('writeoffDate').value = currentDate;
+        writeoffModal.style.display = 'block';
+    });
+    
+    historyBtn.addEventListener('click', () => {
+        loadInventoryHistory();
+        historyModal.style.display = 'block';
+    });
+    
+    // Close modal handlers
+    document.getElementById('cancelDelivery').addEventListener('click', () => {
+        deliveryModal.style.display = 'none';
+    });
+    
+    document.getElementById('cancelWriteoff').addEventListener('click', () => {
+        writeoffModal.style.display = 'none';
+    });
+    
+    document.getElementById('closeHistory').addEventListener('click', () => {
+        historyModal.style.display = 'none';
+    });
+    
+    // Update available quantity display when product is selected for writeoff
+    document.getElementById('writeoffFlowerSelect').addEventListener('change', (e) => {
+        const availableDiv = document.getElementById('availableQuantity');
+        if (e.target.value) {
+            const quantity = e.target.selectedOptions[0].dataset.quantity;
+            availableDiv.textContent = `Доступно для списания: ${quantity} шт.`;
+            document.getElementById('writeoffQuantity').max = quantity;
+        } else {
+            availableDiv.textContent = '';
+            document.getElementById('writeoffQuantity').removeAttribute('max');
+        }
+    });
+    
+    // Delivery form submission
+    deliveryForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = {
+            flower_id: document.getElementById('deliveryFlowerSelect').value,
+            quantity: parseInt(document.getElementById('deliveryQuantity').value),
+            delivery_date: document.getElementById('deliveryDate').value,
+            note: document.getElementById('deliveryNote').value
+        };
+        
+        try {
+            const response = await fetch('/api/flowers/delivery', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ ${result.message}`);
+                deliveryModal.style.display = 'none';
+                deliveryForm.reset();
+                location.reload(); // Reload to see updated quantities
+            } else {
+                alert(`❌ Ошибка: ${result.detail || 'Неизвестная ошибка'}`);
+            }
+        } catch (error) {
+            console.error('Delivery error:', error);
+            alert('❌ Ошибка добавления поставки');
+        }
+    });
+    
+    // Writeoff form submission
+    writeoffForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = {
+            flower_id: document.getElementById('writeoffFlowerSelect').value,
+            quantity: parseInt(document.getElementById('writeoffQuantity').value),
+            writeoff_date: document.getElementById('writeoffDate').value,
+            reason: document.getElementById('writeoffReason').value,
+            note: document.getElementById('writeoffNote').value
+        };
+        
+        try {
+            const response = await fetch('/api/flowers/writeoff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ ${result.message}`);
+                writeoffModal.style.display = 'none';
+                writeoffForm.reset();
+                location.reload(); // Reload to see updated quantities
+            } else {
+                alert(`❌ Ошибка: ${result.detail || 'Неизвестная ошибка'}`);
+            }
+        } catch (error) {
+            console.error('Writeoff error:', error);
+            alert('❌ Ошибка списания товара');
+        }
+    });
+    
+    // Load inventory history
+    async function loadInventoryHistory() {
+        try {
+            const response = await fetch('/api/inventory/history?limit=100');
+            const result = await response.json();
+            
+            const historyContent = document.getElementById('historyContent');
+            
+            if (result.success && result.movements.length > 0) {
+                const historyHTML = `
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f8f9fa;">
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Дата</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Товар</th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 2px solid #dee2e6;">Количество</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Операция</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Примечание</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${result.movements.map(movement => `
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 8px 12px;">${movement.delivery_date || '-'}</td>
+                                    <td style="padding: 8px 12px; font-weight: 600;">${movement.product_name}</td>
+                                    <td style="padding: 8px 12px; text-align: center;">
+                                        <span style="color: ${movement.quantity > 0 ? '#28a745' : '#dc3545'};">
+                                            ${movement.quantity > 0 ? '+' : ''}${movement.quantity}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 8px 12px;">
+                                        <span style="padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; 
+                                              background: ${movement.reason === 'delivery' ? '#d4edda' : '#f8d7da'}; 
+                                              color: ${movement.reason === 'delivery' ? '#155724' : '#721c24'};">
+                                            ${movement.reason === 'delivery' ? '📦 Поставка' : '🗑️ Списание'}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 8px 12px; font-size: 0.9rem; color: #6c757d;">${movement.note || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                historyContent.innerHTML = historyHTML;
+            } else {
+                historyContent.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #6c757d;">
+                        📋 История движения товаров пока пуста
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('History loading error:', error);
+            document.getElementById('historyContent').innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: #dc3545;">
+                    ❌ Ошибка загрузки истории
+                </div>
+            `;
+        }
+    }
+    
+    // Close modals by clicking outside
+    [deliveryModal, writeoffModal, historyModal].forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
