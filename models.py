@@ -234,13 +234,40 @@ PAYMENT_METHODS = {
 
 # Status filtering for active/archive view
 ACTIVE_STATUSES = [
-    # English statuses (Supabase format) - только реальные рабочие статусы
-    "paid",        # Оплачен
-    "processing",  # В обработке
+    # Supabase statuses (после трансформации из Bitrix)
+    "new",              # Новый заказ - ВАЖНО: показывать новые заказы!
+    "paid",             # Оплачен
+    "processing",       # В обработке
+    "confirmed",        # Подтвержден
+    "assembled",        # Собран
+    "ready_delivery",   # Готов к доставке
+    "ready_pickup",     # Готов к выдаче
+    "in_transit",       # В пути (доставляется)
+    "shipped",          # Отгружен
+    "unpaid",           # Не оплачен (ждем оплату)
+    "payment_error",    # Ошибка при оплате
+    "problematic",      # Проблемный
+    "reassemble",       # Пересобрать заказ
+    "waiting_processing", # Ожидает обработки
+    "waiting_approval",   # Ждем одобрения заказчика
+    "waiting_group_buy",  # Ждем группового закупа
+    "auction",           # Аукцион
+    "decide",            # Решить
     
-    # Bitrix codes - реальные рабочие статусы из продакшена
-    "AP",   # Принят (розовая кнопка в продакшне)
-    "DE",   # В пути (зеленая кнопка в продакшне)
+    # Kaspi статусы
+    "kaspi_waiting_qr",   # Kaspi ждем сканирования QR
+    "kaspi_qr_scanned",   # Kaspi отсканирован QR, ждем оплату
+    "kaspi_paid",         # Kaspi заказ оплачен
+    "kaspi_payment_error", # Kaspi ошибка оплаты
+    
+    # Cloudpayments статусы
+    "cloudpay_authorized", # Cloudpayments: Авторизован
+    "cloudpay_confirmed",  # Cloudpayments: Подтверждение оплаты
+    
+    # Bitrix codes (для обратной совместимости, если есть старые данные)
+    "N",    # Новый заказ (Bitrix код)
+    "AP",   # Принят
+    "DE",   # В пути
     "PD",   # Оплачен
     "CO",   # Собран
     "TR",   # Передан курьеру
@@ -250,20 +277,32 @@ ACTIVE_STATUSES = [
     "P",    # В обработке
     "KC",   # У партнера
     "GP",   # Подарок
-    "N",    # Новый заказ (Bitrix код)
-    
-    # НЕ включаем "new" - это старые мигрированные данные!
+    "DN",   # Ожидает обработки
+    "WA",   # Ждем одобрения заказчика
+    "AN",   # Аукцион
+    "CA",   # Решить
+    "KA",   # Kaspi ждем сканирования QR
+    "KB",   # Kaspi отсканирован QR
+    "AU",   # Cloudpayments: Авторизован
+    "CP",   # Cloudpayments: Подтверждение оплаты
 ]
 
 ARCHIVE_STATUSES = [
-    # English statuses (Supabase format)
-    "completed", "cancelled", "refunded", "unrealized",
-    # Bitrix codes
+    # Supabase statuses (архивные/завершенные)
+    "completed",           # Выполнен
+    "cancelled",           # Отменен
+    "refunded",           # Возврат
+    "unrealized",         # Нереализован
+    "cloudpay_canceled",  # Cloudpayments: Отмена авторизованного платежа
+    "cloudpay_refunded",  # Cloudpayments: Возврат оплаты
+    
+    # Bitrix codes (для обратной совместимости)
     "F",    # Выполнен
-    "UN",   # Отменен
-    "CA",   # Отменен системой
+    "UN",   # Нереализован
     "RF",   # Возврат
-    "ER",   # Ошибка оплаты
+    "ER",   # Ошибка оплаты (удален дубликат CA)
+    "AR",   # Cloudpayments: Отмена авторизованного платежа
+    "RR",   # Cloudpayments: Возврат оплаты
 ]
 
 # Status mapping for Bitrix synchronization
