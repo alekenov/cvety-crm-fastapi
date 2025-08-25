@@ -327,8 +327,10 @@ async def list_orders(
         # Apply view filter (active or archive)
         if view == "archive":
             query = query.in_('status', ARCHIVE_STATUSES)
+            logger.info(f"Filtering by ARCHIVE_STATUSES: {len(ARCHIVE_STATUSES)} statuses")
         else:  # default to active - показываем ТОЛЬКО заказы с активными рабочими статусами
             query = query.in_('status', ACTIVE_STATUSES)
+            logger.info(f"Filtering by ACTIVE_STATUSES: {len(ACTIVE_STATUSES)} statuses, completed in list: {'completed' in ACTIVE_STATUSES}")
         
         if search:
             # Search in order number, recipient name, or phone
@@ -345,32 +347,58 @@ async def list_orders(
         
         result = query.execute()
         
-        # Filter out garbage orders with status 'new'
+        # Log what we got before filtering
+        logger.info(f"Query executed. Got {len(result.data) if result.data else 0} orders for view={view}")
+        if result.data:
+            from collections import Counter
+            status_counts = Counter([o.get('status') for o in result.data])
+            logger.info(f"Before filtering - statuses in result: {dict(status_counts)}")
+        
+        # Filter out garbage orders for active view
         if view == "active" and result.data:
             from datetime import datetime, timedelta
-            three_days_ago = (datetime.now() - timedelta(days=3)).isoformat()
+            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
             
             filtered_orders = []
             for order in result.data:
-                # Skip orders with status 'new' that are garbage
-                if order.get('status') == 'new':
+                bitrix_id = order.get('bitrix_order_id')
+                recipient = order.get('recipient_name', '')
+                status = order.get('status', '')
+                created = order.get('created_at', '')
+                
+                # Skip orders without proper bitrix_order_id or with timestamp-like IDs
+                if not bitrix_id or bitrix_id > 200000 or str(bitrix_id).startswith('175'):
+                    continue
+                    
+                # Skip test/sync orders
+                if 'Получатель Обратной Синхронизации' in str(recipient):
+                    continue
+                if 'Синхронизации' in str(recipient) or 'reverse_sync' in str(recipient).lower():
+                    continue
+                    
+                # For 'new' status, apply stricter filtering
+                if status == 'new':
+                    # Skip if no recipient or 'None'
+                    if not recipient or recipient == 'None' or recipient == '':
+                        continue
+                    # Skip old new orders (> 7 days)
+                    if created and created < seven_days_ago:
+                        continue
+                
+                # For 'unrealized' status, skip old ones
+                if status == 'unrealized':
                     # Skip if no recipient
-                    if not order.get('recipient_name') or order.get('recipient_name') == 'None':
+                    if not recipient or recipient == 'None':
                         continue
-                    # Skip test orders
-                    if 'Получатель' in str(order.get('recipient_name', '')) or 'Синхронизации' in str(order.get('recipient_name', '')):
-                        continue
-                    # Skip old orders with status 'new' (> 3 days)
-                    if order.get('created_at') and order.get('created_at') < three_days_ago:
-                        continue
-                    # Skip orders with timestamp-like IDs
-                    if str(order.get('bitrix_order_id', '')).startswith('175'):
+                    # Skip old unrealized orders (> 7 days)
+                    if created and created < seven_days_ago:
                         continue
                 
                 filtered_orders.append(order)
             
             result.data = filtered_orders
             result.count = len(filtered_orders)
+            logger.info(f"After filtering: {len(filtered_orders)} orders for view={view}")
         
         total_pages = (result.count // limit) + (1 if result.count % limit > 0 else 0)
         
@@ -1204,31 +1232,28 @@ async def list_products(
         limit = 50
         offset = (page - 1) * limit
         
-        # Получаем список всех активных магазинов для фильтра
-        sellers_query = db.table('sellers').select('id, name').eq('is_active', True).order('name')
+        # Получаем список всех активных магазинов для фильтра (с description для подсчета)
+        sellers_query = db.table('sellers').select('id, name, description').eq('is_active', True).order('name')
         sellers_result = sellers_query.execute()
         sellers = sellers_result.data if sellers_result.data else []
         
-        # Получаем количество товаров для каждого магазина
-        seller_counts = {}
-        if sellers:
-            # Получаем статистику по магазинам
-            count_query = db.rpc('get_seller_product_counts', {})
-            try:
-                count_result = count_query.execute()
-                if count_result.data:
-                    for item in count_result.data:
-                        seller_counts[item['seller_id']] = item['product_count']
-            except:
-                # Если функция не существует, используем простой подход
-                for seller in sellers:
-                    count_q = db.table('products').select('id', count='exact').eq('seller_id', seller['id'])
-                    count_res = count_q.execute()
-                    seller_counts[seller['id']] = count_res.count if hasattr(count_res, 'count') else 0
+        # Debug: логируем количество найденных магазинов
+        logger.info(f"Found {len(sellers)} active sellers for filter dropdown")
         
-        # Добавляем количество товаров к информации о магазинах
+        # Извлекаем количество товаров из описания (временное решение)
+        # Количество сохранено в формате "Товаров: N" в поле description
+        import re
         for seller in sellers:
-            seller['product_count'] = seller_counts.get(seller['id'], 0)
+            product_count = 0
+            if seller.get('description') and 'Товаров:' in seller.get('description', ''):
+                match = re.search(r'Товаров: (\d+)', seller['description'])
+                if match:
+                    product_count = int(match.group(1))
+            seller['product_count'] = product_count
+        
+        # Debug: проверяем первых 3 магазинов
+        if sellers:
+            logger.info(f"First 3 sellers: {sellers[:3]}")
         
         # Build query - оптимизированная выборка только нужных полей
         query = db.table('products').select(

@@ -1,0 +1,109 @@
+{
+  "timestamp": "2025-08-25T12:52:17.170583",
+  "total": 200,
+  "created": 200,
+  "updated": 0,
+  "errors": 0,
+  "top_shops": [
+    {
+      "name": "Cvetykz",
+      "bitrix_id": 17008,
+      "product_count": 2828
+    },
+    {
+      "name": "Оранж",
+      "bitrix_id": 71264,
+      "product_count": 780
+    },
+    {
+      "name": "Rozy.kz Astana",
+      "bitrix_id": 559975,
+      "product_count": 646
+    },
+    {
+      "name": "Henry Bonnar",
+      "bitrix_id": 90246,
+      "product_count": 443
+    },
+    {
+      "name": "Obuket flowers ",
+      "bitrix_id": 72812,
+      "product_count": 420
+    },
+    {
+      "name": "ROZY.KZ Момышулы",
+      "bitrix_id": 608718,
+      "product_count": 307
+    },
+    {
+      "name": "Ayccoflowers",
+      "bitrix_id": 33953,
+      "product_count": 307
+    },
+    {
+      "name": "Zhanym flowers ",
+      "bitrix_id": 320644,
+      "product_count": 306
+    },
+    {
+      "name": "Eileen flowers",
+      "bitrix_id": 121038,
+      "product_count": 270
+    },
+    {
+      "name": "ArtDi Flowers",
+      "bitrix_id": 33889,
+      "product_count": 239
+    },
+    {
+      "name": "CACTUS Flowers ",
+      "bitrix_id": 608708,
+      "product_count": 232
+    },
+    {
+      "name": "FLOVER",
+      "bitrix_id": 17024,
+      "product_count": 226
+    },
+    {
+      "name": "Santini ",
+      "bitrix_id": 75509,
+      "product_count": 213
+    },
+    {
+      "name": "bayberries.kz",
+      "bitrix_id": 106299,
+      "product_count": 189
+    },
+    {
+      "name": "Royal Flowers Semey ",
+      "bitrix_id": 285676,
+      "product_count": 161
+    },
+    {
+      "name": "VLVT Flowers Almaty",
+      "bitrix_id": 576631,
+      "product_count": 160
+    },
+    {
+      "name": "floria.taraz",
+      "bitrix_id": 71314,
+      "product_count": 156
+    },
+    {
+      "name": "Wow_Flower",
+      "bitrix_id": 50187,
+      "product_count": 156
+    },
+    {
+      "name": "Vitamin buket",
+      "bitrix_id": 136396,
+      "product_count": 155
+    },
+    {
+      "name": "Blackpepper Flower Bar ",
+      "bitrix_id": 580793,
+      "product_count": 133
+    }
+  ]
+}

@@ -235,7 +235,7 @@ PAYMENT_METHODS = {
 # Status filtering for active/archive view
 ACTIVE_STATUSES = [
     # Supabase statuses (после трансформации из Bitrix)
-    # "new" - ИСКЛЮЧЕН: слишком много мусорных данных с этим статусом
+    "new",              # Новый (с фильтрацией мусора в API)
     "paid",             # Оплачен
     "processing",       # В обработке
     "confirmed",        # Подтвержден
@@ -264,27 +264,8 @@ ACTIVE_STATUSES = [
     "cloudpay_authorized", # Cloudpayments: Авторизован
     "cloudpay_confirmed",  # Cloudpayments: Подтверждение оплаты
     
-    # Bitrix codes (для обратной совместимости, если есть старые данные)
-    "N",    # Новый заказ (Bitrix код)
-    "AP",   # Принят
-    "DE",   # В пути
-    "PD",   # Оплачен
-    "CO",   # Собран
-    "TR",   # Передан курьеру
-    "CF",   # Ждем оплату
-    "RO",   # Переназначен
-    "RD",   # Перенесен
-    "P",    # В обработке
-    "KC",   # У партнера
-    "GP",   # Подарок
-    "DN",   # Ожидает обработки
-    "WA",   # Ждем одобрения заказчика
-    "AN",   # Аукцион
-    "CA",   # Решить
-    "KA",   # Kaspi ждем сканирования QR
-    "KB",   # Kaspi отсканирован QR
-    "AU",   # Cloudpayments: Авторизован
-    "CP",   # Cloudpayments: Подтверждение оплаты
+    # Bitrix codes that actually exist in DB (not transformed)
+    "DE",   # В пути (exists as-is in DB for some orders)
 ]
 
 ARCHIVE_STATUSES = [
