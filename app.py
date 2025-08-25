@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form, HTTPException, Depends, Header
+from fastapi import FastAPI, Request, Form, HTTPException, Depends, Header, File, UploadFile
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -13,6 +13,10 @@ import asyncio
 import requests
 import httpx
 from order_number_generator import order_number_generator
+import os
+import uuid
+import shutil
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -190,6 +194,92 @@ async def sync_product_status_to_bitrix(bitrix_product_id: int, is_active: bool)
         return False
     except Exception as e:
         logger.error(f"❌ Unexpected error syncing product status to Bitrix: {e}")
+        return False
+
+
+async def sync_photos_to_bitrix(order_id: str, order_number: str, bitrix_order_id: int, photo_paths: List[str]) -> bool:
+    """
+    Синхронизирует фотографии до доставки с Bitrix через PHP endpoint
+    
+    Args:
+        order_id: ID заказа в Supabase
+        order_number: Номер заказа
+        bitrix_order_id: ID заказа в Bitrix
+        photo_paths: Пути к фотографиям для синхронизации
+        
+    Returns:
+        True если синхронизация успешна, False если ошибка
+    """
+    if not app_config.BITRIX_SYNC_ENABLED:
+        logger.info(f"Bitrix sync is disabled, skipping photo sync for order {order_id}")
+        return False
+        
+    if not bitrix_order_id or not photo_paths:
+        logger.info(f"No bitrix_order_id or photos for order {order_id}, skipping photo sync")
+        return False
+        
+    try:
+        import base64
+        import os
+        
+        # Подготавливаем данные фотографий
+        photos_data = []
+        for photo_path in photo_paths:
+            if os.path.exists(photo_path):
+                with open(photo_path, 'rb') as file:
+                    photo_binary = file.read()
+                    base64_data = base64.b64encode(photo_binary).decode('utf-8')
+                    
+                    photos_data.append({
+                        "filename": os.path.basename(photo_path),
+                        "base64_data": base64_data,
+                        "uploaded_at": datetime.now().isoformat()
+                    })
+            else:
+                logger.warning(f"Photo file not found: {photo_path}")
+        
+        if not photos_data:
+            logger.warning(f"No valid photos found for order {order_id}")
+            return False
+        
+        # URL для синхронизации фотографий
+        photo_sync_url = "https://cvety.kz/supabase-photo-sync.php"
+        
+        payload = {
+            "order_number": order_number,
+            "bitrix_order_id": bitrix_order_id,
+            "photos": photos_data
+        }
+        
+        # Отправляем фотографии в Bitrix
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                photo_sync_url,
+                json=payload,
+                headers={
+                    "X-API-TOKEN": "cvety_photo_sync_token_2025_secure_key_789",
+                    "Content-Type": "application/json"
+                }
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    photos_saved = result.get("data", {}).get("photos_saved", 0)
+                    logger.info(f"✅ Successfully synced {photos_saved} photos to Bitrix for order {bitrix_order_id}")
+                    return True
+                else:
+                    logger.error(f"❌ Bitrix photo sync failed: {result.get('message', 'Unknown error')}")
+                    return False
+            else:
+                logger.error(f"❌ Failed to sync photos to Bitrix: HTTP {response.status_code} - {response.text}")
+                return False
+                
+    except httpx.TimeoutException:
+        logger.error(f"⏱️ Timeout syncing photos for order {order_id} to Bitrix")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error syncing photos for order {order_id} to Bitrix: {e}")
         return False
 
 
@@ -1245,8 +1335,8 @@ async def list_products(
             search_term = f"%{search}%"
             query = query.ilike('name', search_term)
         
-        # Sort and paginate
-        query = query.order('created_at', desc=True)
+        # Sort and paginate - активные товары первыми, затем по дате создания
+        query = query.order('is_active', desc=True).order('created_at', desc=True)
         query = query.range(offset, offset + limit - 1)
         
         result = query.execute()
@@ -1778,8 +1868,26 @@ async def set_product_available(
         product = product_result.data[0]
         product_name = product.get('name', 'Unknown')
         
-        # Получаем bitrix_id из metadata
+        # Обновляем metadata.properties.IN_STOCK на '158' (в наличии)
         metadata = product.get('metadata', {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        
+        if 'properties' not in metadata:
+            metadata['properties'] = {}
+        
+        metadata['properties']['IN_STOCK'] = '158'  # В наличии
+        
+        # Обновляем товар в базе данных
+        db.table('products')\
+            .update({
+                'metadata': metadata,
+                'updated_at': datetime.now().isoformat()
+            })\
+            .eq('id', product_id)\
+            .execute()
+        
+        # Получаем bitrix_id для синхронизации
         bitrix_id = None
         if isinstance(metadata, dict):
             bitrix_id = metadata.get('bitrix_id')
@@ -1787,9 +1895,7 @@ async def set_product_available(
         if not bitrix_id:
             logger.warning(f"Product {product_id} has no bitrix_id, skipping Bitrix sync")
         
-        # В будущем здесь будет обновление поля is_available в Supabase
-        # Пока что логируем действие
-        logger.info(f"Setting product '{product_name}' as AVAILABLE")
+        logger.info(f"✅ Product '{product_name}' set as AVAILABLE (IN_STOCK=158)")
         
         # Синхронизируем с Bitrix если есть bitrix_id
         if bitrix_id:
@@ -1828,8 +1934,26 @@ async def set_product_unavailable(
         product = product_result.data[0]
         product_name = product.get('name', 'Unknown')
         
-        # Получаем bitrix_id из metadata
+        # Обновляем metadata.properties.IN_STOCK на '159' (нет в наличии)
         metadata = product.get('metadata', {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        
+        if 'properties' not in metadata:
+            metadata['properties'] = {}
+        
+        metadata['properties']['IN_STOCK'] = '159'  # Нет в наличии
+        
+        # Обновляем товар в базе данных
+        db.table('products')\
+            .update({
+                'metadata': metadata,
+                'updated_at': datetime.now().isoformat()
+            })\
+            .eq('id', product_id)\
+            .execute()
+        
+        # Получаем bitrix_id для синхронизации
         bitrix_id = None
         if isinstance(metadata, dict):
             bitrix_id = metadata.get('bitrix_id')
@@ -1837,9 +1961,7 @@ async def set_product_unavailable(
         if not bitrix_id:
             logger.warning(f"Product {product_id} has no bitrix_id, skipping Bitrix sync")
         
-        # В будущем здесь будет обновление поля is_available в Supabase
-        # Пока что логируем действие
-        logger.info(f"Setting product '{product_name}' as UNAVAILABLE")
+        logger.info(f"❌ Product '{product_name}' set as UNAVAILABLE (IN_STOCK=159)")
         
         # Синхронизируем с Bitrix если есть bitrix_id
         if bitrix_id:
@@ -2937,6 +3059,170 @@ async def api_get_orders(
         return result.data
     except Exception as e:
         logger.error(f"API get orders error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== PRE-DELIVERY PHOTOS ====================
+
+@app.post("/api/orders/{order_id}/pre-delivery-photos")
+async def upload_pre_delivery_photos(
+    order_id: str,
+    photos: List[UploadFile] = File(...),
+    db: Client = Depends(get_supabase)
+):
+    """
+    Upload pre-delivery photos for an order and automatically change status to 'assembled'
+    Only allowed for orders with status 'accepted'
+    """
+    try:
+        # 1. Проверяем существование заказа и его статус
+        order_result = db.table('orders').select('*').eq('id', order_id).execute()
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        order = order_result.data[0]
+        if order['status'] != 'accepted':
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Загрузка фото доступна только для принятых заказов. Текущий статус: {order['status']}"
+            )
+        
+        # 2. Создаем директорию для заказа
+        upload_dir = Path(f"static/uploads/pre-delivery/{order_id}")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 3. Сохраняем файлы
+        saved_photos = []
+        for photo in photos:
+            # Проверяем тип файла
+            if not photo.content_type.startswith('image/'):
+                raise HTTPException(status_code=400, detail=f"Файл {photo.filename} не является изображением")
+            
+            # Генерируем уникальное имя файла
+            file_extension = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
+            unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
+            file_path = upload_dir / unique_filename
+            
+            # Сохраняем файл
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(photo.file, buffer)
+            
+            # Добавляем информацию о фото
+            saved_photos.append({
+                "url": f"/static/uploads/pre-delivery/{order_id}/{unique_filename}",
+                "filename": photo.filename,
+                "uploaded_at": datetime.now().isoformat(),
+                "uploaded_by": "CRM User",  # TODO: Добавить реальную авторизацию
+                "type": "pre_delivery",
+                "size": os.path.getsize(file_path)
+            })
+        
+        # 4. Обновляем заказ в БД и меняем статус
+        current_photos = order.get('pre_delivery_photos', [])
+        all_photos = current_photos + saved_photos
+        
+        update_result = db.table('orders').update({
+            'pre_delivery_photos': all_photos,
+            'status': 'assembled',  # Автоматическая смена статуса!
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        logger.info(f"Pre-delivery photos uploaded for order {order_id}, status changed to 'assembled'")
+        
+        # 5. Синхронизация фотографий с Bitrix
+        bitrix_order_id = order.get('bitrix_order_id')
+        order_number = order.get('order_number')
+        
+        if bitrix_order_id and order_number:
+            # Собираем пути к только что загруженным фотографиям
+            photo_paths = [f"static/uploads/pre-delivery/{order_id}/{os.path.basename(photo['url'])}" for photo in saved_photos]
+            
+            # Запускаем синхронизацию асинхронно (не блокируем ответ пользователю)
+            import asyncio
+            asyncio.create_task(sync_photos_to_bitrix(
+                order_id=order_id,
+                order_number=order_number, 
+                bitrix_order_id=bitrix_order_id,
+                photo_paths=photo_paths
+            ))
+            logger.info(f"Started photo sync to Bitrix for order {bitrix_order_id}")
+        else:
+            logger.warning(f"Cannot sync photos: missing bitrix_order_id or order_number for order {order_id}")
+        
+        return {
+            "message": f"Загружено {len(saved_photos)} фото. Статус заказа изменен на 'Собран'",
+            "photos_uploaded": len(saved_photos),
+            "status_changed_to": "assembled",
+            "photos": saved_photos
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading pre-delivery photos for order {order_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки фото: {str(e)}")
+
+
+@app.get("/api/orders/{order_id}/pre-delivery-photos")
+async def get_pre_delivery_photos(
+    order_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Get pre-delivery photos for an order"""
+    try:
+        result = db.table('orders').select('pre_delivery_photos').eq('id', order_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        photos = result.data[0].get('pre_delivery_photos', [])
+        return {"photos": photos}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting pre-delivery photos for order {order_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/orders/{order_id}/pre-delivery-photos/{photo_index}")
+async def delete_pre_delivery_photo(
+    order_id: str,
+    photo_index: int,
+    db: Client = Depends(get_supabase)
+):
+    """Delete a specific pre-delivery photo by index"""
+    try:
+        # Получаем заказ
+        result = db.table('orders').select('pre_delivery_photos').eq('id', order_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        photos = result.data[0].get('pre_delivery_photos', [])
+        if photo_index >= len(photos) or photo_index < 0:
+            raise HTTPException(status_code=404, detail="Фото не найдено")
+        
+        # Удаляем файл с диска
+        photo_to_delete = photos[photo_index]
+        file_path = Path(photo_to_delete['url'].lstrip('/'))
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Удаляем из массива
+        photos.pop(photo_index)
+        
+        # Обновляем в БД
+        db.table('orders').update({
+            'pre_delivery_photos': photos,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        logger.info(f"Deleted pre-delivery photo {photo_index} from order {order_id}")
+        return {"message": "Фото удалено", "remaining_photos": len(photos)}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting pre-delivery photo for order {order_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
