@@ -124,6 +124,73 @@ async def create_order_in_bitrix(order_data: dict, order_items: List[dict] = Non
         logger.error(f"❌ Unexpected error creating order in Bitrix: {e}")
         return None
 
+
+async def sync_product_status_to_bitrix(bitrix_product_id: int, is_active: bool) -> bool:
+    """
+    Синхронизирует статус товара с Bitrix через PHP endpoint
+    
+    Args:
+        bitrix_product_id: ID товара в Bitrix
+        is_active: True для активации, False для деактивации
+        
+    Returns:
+        True если синхронизация успешна, False если ошибка
+    """
+    if not app_config.BITRIX_SYNC_ENABLED:
+        logger.info("Bitrix sync is disabled for products")
+        return False
+        
+    try:
+        # Подготовка данных для PHP endpoint
+        payload = {
+            'product_id': bitrix_product_id,
+            'is_active': is_active,
+            'action': 'activate' if is_active else 'deactivate'
+        }
+        
+        logger.info(f"🔄 Syncing product status to Bitrix: ID={bitrix_product_id}, active={is_active}")
+        
+        # URL для синхронизации статуса товара
+        # TODO: Создать этот endpoint на production сервере
+        product_sync_url = app_config.BITRIX_API_URL.replace(
+            'supabase-reverse-sync-with-items.php',
+            'supabase-product-status-sync.php'
+        )
+        
+        # Отправляем запрос к Bitrix API
+        response = requests.post(
+            product_sync_url,
+            json=payload,
+            headers={
+                'X-API-TOKEN': app_config.BITRIX_API_TOKEN,
+                'Content-Type': 'application/json'
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                logger.info(f"✅ Product status synced to Bitrix: ID={bitrix_product_id}")
+                return True
+            else:
+                logger.error(f"❌ Bitrix returned error: {result.get('error', 'Unknown error')}")
+                return False
+        else:
+            logger.error(f"❌ HTTP {response.status_code} from Bitrix: {response.text[:200]}")
+            return False
+            
+    except requests.exceptions.Timeout:
+        logger.error("❌ Timeout while syncing product status to Bitrix")
+        return False
+    except requests.exceptions.ConnectionError:
+        logger.error("❌ Connection error while syncing product status to Bitrix")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Unexpected error syncing product status to Bitrix: {e}")
+        return False
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize Supabase client on startup"""
@@ -277,6 +344,34 @@ async def list_orders(
         query = query.range(offset, offset + limit - 1)
         
         result = query.execute()
+        
+        # Filter out garbage orders with status 'new'
+        if view == "active" and result.data:
+            from datetime import datetime, timedelta
+            three_days_ago = (datetime.now() - timedelta(days=3)).isoformat()
+            
+            filtered_orders = []
+            for order in result.data:
+                # Skip orders with status 'new' that are garbage
+                if order.get('status') == 'new':
+                    # Skip if no recipient
+                    if not order.get('recipient_name') or order.get('recipient_name') == 'None':
+                        continue
+                    # Skip test orders
+                    if 'Получатель' in str(order.get('recipient_name', '')) or 'Синхронизации' in str(order.get('recipient_name', '')):
+                        continue
+                    # Skip old orders with status 'new' (> 3 days)
+                    if order.get('created_at') and order.get('created_at') < three_days_ago:
+                        continue
+                    # Skip orders with timestamp-like IDs
+                    if str(order.get('bitrix_order_id', '')).startswith('175'):
+                        continue
+                
+                filtered_orders.append(order)
+            
+            result.data = filtered_orders
+            result.count = len(filtered_orders)
+        
         total_pages = (result.count // limit) + (1 if result.count % limit > 0 else 0)
         
         # PERFORMANCE OPTIMIZATION: Batch load order items and products
@@ -1099,6 +1194,7 @@ async def list_products(
     request: Request,
     category: Optional[str] = None,
     search: Optional[str] = None,
+    seller_id: Optional[str] = None,
     page: int = 1,
     db: Client = Depends(get_supabase)
 ):
@@ -1108,15 +1204,44 @@ async def list_products(
         limit = 50
         offset = (page - 1) * limit
         
+        # Получаем список всех активных магазинов для фильтра
+        sellers_query = db.table('sellers').select('id, name').eq('is_active', True).order('name')
+        sellers_result = sellers_query.execute()
+        sellers = sellers_result.data if sellers_result.data else []
+        
+        # Получаем количество товаров для каждого магазина
+        seller_counts = {}
+        if sellers:
+            # Получаем статистику по магазинам
+            count_query = db.rpc('get_seller_product_counts', {})
+            try:
+                count_result = count_query.execute()
+                if count_result.data:
+                    for item in count_result.data:
+                        seller_counts[item['seller_id']] = item['product_count']
+            except:
+                # Если функция не существует, используем простой подход
+                for seller in sellers:
+                    count_q = db.table('products').select('id', count='exact').eq('seller_id', seller['id'])
+                    count_res = count_q.execute()
+                    seller_counts[seller['id']] = count_res.count if hasattr(count_res, 'count') else 0
+        
+        # Добавляем количество товаров к информации о магазинах
+        for seller in sellers:
+            seller['product_count'] = seller_counts.get(seller['id'], 0)
+        
         # Build query - оптимизированная выборка только нужных полей
         query = db.table('products').select(
-            'id, name, price, old_price, is_active, created_at, description, slug, metadata',
+            'id, name, price, old_price, is_active, created_at, description, slug, metadata, seller_id',
             count='exact'
         )
         
         # Apply filters
         if category:
             query = query.eq('category_id', category)
+        
+        if seller_id:
+            query = query.eq('seller_id', seller_id)
         
         if search:
             search_term = f"%{search}%"
@@ -1129,6 +1254,19 @@ async def list_products(
         result = query.execute()
         total_pages = (result.count // limit) + (1 if result.count % limit > 0 else 0)
         
+        # Если есть seller_id в товарах, получаем информацию о магазинах
+        if result.data:
+            seller_ids = list(set([p['seller_id'] for p in result.data if p.get('seller_id')]))
+            if seller_ids:
+                sellers_info_query = db.table('sellers').select('id, name').in_('id', seller_ids)
+                sellers_info_result = sellers_info_query.execute()
+                sellers_dict = {s['id']: s['name'] for s in sellers_info_result.data} if sellers_info_result.data else {}
+                
+                # Добавляем название магазина к каждому товару
+                for product in result.data:
+                    if product.get('seller_id'):
+                        product['seller_name'] = sellers_dict.get(product['seller_id'], 'Неизвестный')
+        
         return templates.TemplateResponse("products.html", {
             "request": request,
             "products": result.data,
@@ -1136,7 +1274,9 @@ async def list_products(
             "page": page,
             "total_pages": total_pages,
             "active_page": "products",
-            "search_term": search
+            "search_term": search,
+            "sellers": sellers,
+            "selected_seller_id": seller_id
         })
         
     except Exception as e:
@@ -2214,6 +2354,162 @@ async def api_get_products(
         return result.data
     except Exception as e:
         logger.error(f"API get products error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/products/{product_id}/activate")
+async def activate_product(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Activate a single product"""
+    try:
+        # Check if product exists
+        product = db.table('products').select('*').eq('id', product_id).execute()
+        if not product.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        # Update product status
+        result = db.table('products')\
+            .update({'is_active': True})\
+            .eq('id', product_id)\
+            .execute()
+        
+        # Sync to Bitrix if enabled
+        if app_config.BITRIX_SYNC_ENABLED and product.data[0].get('bitrix_product_id'):
+            await sync_product_status_to_bitrix(
+                product.data[0]['bitrix_product_id'], 
+                is_active=True
+            )
+        
+        logger.info(f"✅ Product {product_id} activated")
+        return {"success": True, "product_id": product_id, "is_active": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error activating product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/products/{product_id}/deactivate")
+async def deactivate_product(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Deactivate a single product"""
+    try:
+        # Check if product exists
+        product = db.table('products').select('*').eq('id', product_id).execute()
+        if not product.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        # Update product status
+        result = db.table('products')\
+            .update({'is_active': False})\
+            .eq('id', product_id)\
+            .execute()
+        
+        # Sync to Bitrix if enabled
+        if app_config.BITRIX_SYNC_ENABLED and product.data[0].get('bitrix_product_id'):
+            await sync_product_status_to_bitrix(
+                product.data[0]['bitrix_product_id'], 
+                is_active=False
+            )
+        
+        logger.info(f"❌ Product {product_id} deactivated")
+        return {"success": True, "product_id": product_id, "is_active": False}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deactivating product {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/products/bulk-activate")
+async def bulk_activate_products(
+    product_ids: List[str],
+    db: Client = Depends(get_supabase)
+):
+    """Activate multiple products at once"""
+    try:
+        if not product_ids:
+            raise HTTPException(status_code=400, detail="No product IDs provided")
+        
+        # Update all products
+        result = db.table('products')\
+            .update({'is_active': True})\
+            .in_('id', product_ids)\
+            .execute()
+        
+        activated_count = len(result.data) if result.data else 0
+        
+        # Sync to Bitrix if enabled (async in background)
+        if app_config.BITRIX_SYNC_ENABLED:
+            for product in result.data:
+                if product.get('bitrix_product_id'):
+                    asyncio.create_task(
+                        sync_product_status_to_bitrix(
+                            product['bitrix_product_id'], 
+                            is_active=True
+                        )
+                    )
+        
+        logger.info(f"✅ Bulk activated {activated_count} products")
+        return {
+            "success": True, 
+            "activated_count": activated_count,
+            "product_ids": product_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk activating products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/products/bulk-deactivate")
+async def bulk_deactivate_products(
+    product_ids: List[str],
+    db: Client = Depends(get_supabase)
+):
+    """Deactivate multiple products at once"""
+    try:
+        if not product_ids:
+            raise HTTPException(status_code=400, detail="No product IDs provided")
+        
+        # Update all products
+        result = db.table('products')\
+            .update({'is_active': False})\
+            .in_('id', product_ids)\
+            .execute()
+        
+        deactivated_count = len(result.data) if result.data else 0
+        
+        # Sync to Bitrix if enabled (async in background)
+        if app_config.BITRIX_SYNC_ENABLED:
+            for product in result.data:
+                if product.get('bitrix_product_id'):
+                    asyncio.create_task(
+                        sync_product_status_to_bitrix(
+                            product['bitrix_product_id'], 
+                            is_active=False
+                        )
+                    )
+        
+        logger.info(f"❌ Bulk deactivated {deactivated_count} products")
+        return {
+            "success": True, 
+            "deactivated_count": deactivated_count,
+            "product_ids": product_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk deactivating products: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

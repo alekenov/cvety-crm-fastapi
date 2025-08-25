@@ -235,7 +235,7 @@ PAYMENT_METHODS = {
 # Status filtering for active/archive view
 ACTIVE_STATUSES = [
     # Supabase statuses (после трансформации из Bitrix)
-    "new",              # Новый заказ - ВАЖНО: показывать новые заказы!
+    # "new" - ИСКЛЮЧЕН: слишком много мусорных данных с этим статусом
     "paid",             # Оплачен
     "processing",       # В обработке
     "confirmed",        # Подтвержден
