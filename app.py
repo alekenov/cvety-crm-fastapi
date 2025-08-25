@@ -11,6 +11,8 @@ import logging
 import json
 import asyncio
 import requests
+import httpx
+from order_number_generator import order_number_generator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -235,66 +237,13 @@ def get_supabase():
 
 @app.get("/")
 async def root():
-    """Redirect root to CRM dashboard"""
-    return RedirectResponse(url="/crm")
+    """Redirect root to CRM orders"""
+    return RedirectResponse(url="/crm/orders")
 
-@app.get("/crm", response_class=HTMLResponse)
-async def crm_dashboard(
-    request: Request,
-    db: Client = Depends(get_supabase)
-):
-    """Main CRM dashboard with statistics"""
-    
-    try:
-        today = date.today().isoformat()
-        
-        # Get today's orders count
-        orders_today = db.table('orders')\
-            .select('id', count='exact')\
-            .gte('created_at', today)\
-            .execute()
-        
-        # Get total revenue for today
-        revenue_today = db.table('orders')\
-            .select('total_amount')\
-            .gte('created_at', today)\
-            .execute()
-        
-        revenue_sum = sum(float(order['total_amount']) for order in revenue_today.data) if revenue_today.data else 0
-        
-        # Get orders by status
-        all_orders = db.table('orders')\
-            .select('status')\
-            .execute()
-        
-        status_counts = {}
-        for order in all_orders.data:
-            status = order['status']
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # Get recent orders
-        recent_orders = db.table('orders')\
-            .select('id, order_number, status, recipient_name, total_amount, created_at')\
-            .order('created_at', desc=True)\
-            .limit(10)\
-            .execute()
-        
-        return templates.TemplateResponse("dashboard.html", {
-            "request": request,
-            "orders_today": orders_today.count or 0,
-            "revenue_today": revenue_sum,
-            "status_counts": status_counts,
-            "recent_orders": recent_orders.data,
-            "active_page": "dashboard"
-        })
-        
-    except Exception as e:
-        logger.error(f"Dashboard error: {e}")
-        return templates.TemplateResponse("error.html", {
-            "request": request,
-            "error": "Failed to load dashboard data",
-            "active_page": "dashboard"
-        })
+@app.get("/crm")
+async def crm_redirect():
+    """Redirect /crm to orders page"""
+    return RedirectResponse(url="/crm/orders")
 
 # ==================== ORDERS ====================
 
@@ -333,13 +282,12 @@ async def list_orders(
             logger.info(f"Filtering by ACTIVE_STATUSES: {len(ACTIVE_STATUSES)} statuses, completed in list: {'completed' in ACTIVE_STATUSES}")
         
         if search:
-            # Search in order number, recipient name, or phone
+            # For search functionality, we'll filter by multiple OR conditions
+            # Since or_ method may not exist, we'll temporarily disable complex search
+            # and implement simple single-field search for now
             search_term = f"%{search}%"
-            query = query.or_(
-                f"order_number.ilike.{search_term},"
-                f"recipient_name.ilike.{search_term},"
-                f"recipient_phone.ilike.{search_term}"
-            )
+            # Search primarily in order_number field  
+            query = query.ilike('order_number', search_term)
         
         # Sort and paginate
         query = query.order('created_at', desc=True)
@@ -354,51 +302,32 @@ async def list_orders(
             status_counts = Counter([o.get('status') for o in result.data])
             logger.info(f"Before filtering - statuses in result: {dict(status_counts)}")
         
-        # Filter out garbage orders for active view
+        # Minimal filtering - only skip obvious test/sync orders
         if view == "active" and result.data:
-            from datetime import datetime, timedelta
-            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
-            
             filtered_orders = []
             for order in result.data:
                 bitrix_id = order.get('bitrix_order_id')
                 recipient = order.get('recipient_name', '')
-                status = order.get('status', '')
-                created = order.get('created_at', '')
                 
-                # Skip orders without proper bitrix_order_id or with timestamp-like IDs
-                if not bitrix_id or bitrix_id > 200000 or str(bitrix_id).startswith('175'):
+                # Skip only obvious test/sync orders
+                if bitrix_id and str(bitrix_id).startswith('175691'):  # Very specific test pattern
+                    logger.debug(f"Skipping test order with timestamp-like ID: {bitrix_id}")
                     continue
                     
-                # Skip test/sync orders
+                # Skip test/sync orders by recipient name
                 if 'Получатель Обратной Синхронизации' in str(recipient):
+                    logger.debug(f"Skipping test order by recipient: {recipient}")
                     continue
                 if 'Синхронизации' in str(recipient) or 'reverse_sync' in str(recipient).lower():
+                    logger.debug(f"Skipping sync order by recipient: {recipient}")
                     continue
-                    
-                # For 'new' status, apply stricter filtering
-                if status == 'new':
-                    # Skip if no recipient or 'None'
-                    if not recipient or recipient == 'None' or recipient == '':
-                        continue
-                    # Skip old new orders (> 7 days)
-                    if created and created < seven_days_ago:
-                        continue
                 
-                # For 'unrealized' status, skip old ones
-                if status == 'unrealized':
-                    # Skip if no recipient
-                    if not recipient or recipient == 'None':
-                        continue
-                    # Skip old unrealized orders (> 7 days)
-                    if created and created < seven_days_ago:
-                        continue
-                
+                # Accept all other orders (including those with empty recipient_name)
                 filtered_orders.append(order)
             
             result.data = filtered_orders
             result.count = len(filtered_orders)
-            logger.info(f"After filtering: {len(filtered_orders)} orders for view={view}")
+            logger.info(f"After minimal filtering: {len(filtered_orders)} orders for view={view} (showing legitimate orders with any recipient status)")
         
         total_pages = (result.count // limit) + (1 if result.count % limit > 0 else 0)
         
@@ -410,26 +339,29 @@ async def list_orders(
             # Step 1: Collect all order IDs
             order_ids = [order['id'] for order in result.data]
             
-            # Step 2: Batch load first order item for each order
-            # Using a subquery approach to get only first item per order
-            all_first_items = db.table('order_items')\
+            # Step 2: Batch load multiple order items for each order (up to 6 items)
+            all_order_items = db.table('order_items')\
                 .select('order_id, product_id, product_snapshot')\
                 .in_('order_id', order_ids)\
                 .execute()
             
-            # Group first items by order_id (keep only first item per order)
-            first_items_by_order = {}
-            if all_first_items.data:
-                for item in all_first_items.data:
+            # Group items by order_id (keep up to 6 items per order)
+            items_by_order = {}
+            if all_order_items.data:
+                for item in all_order_items.data:
                     order_id = item['order_id']
-                    if order_id not in first_items_by_order:
-                        first_items_by_order[order_id] = item
+                    if order_id not in items_by_order:
+                        items_by_order[order_id] = []
+                    # Keep only up to 6 items per order
+                    if len(items_by_order[order_id]) < 6:
+                        items_by_order[order_id].append(item)
             
             # Step 3: Collect all product_ids that need images
             product_ids_needed = []
-            for item in first_items_by_order.values():
-                if item.get('product_id'):
-                    product_ids_needed.append(item['product_id'])
+            for items_list in items_by_order.values():
+                for item in items_list:
+                    if item.get('product_id'):
+                        product_ids_needed.append(item['product_id'])
             
             # Step 4: Batch load product images for all needed products
             products_data = {}
@@ -450,32 +382,40 @@ async def list_orders(
                 order_dict = dict(order)
                 order_id = order['id']
                 
-                first_item_image = None
-                if order_id in first_items_by_order:
-                    first_item = first_items_by_order[order_id]
-                    product_id = first_item.get('product_id')
+                item_images = []
+                if order_id in items_by_order:
+                    items = items_by_order[order_id]
                     
-                    # Try to get image from regular products first
-                    if product_id and product_id in products_data:
-                        product = products_data[product_id]
-                        if (product.get('metadata') and 
-                            product['metadata'].get('properties', {}).get('ru_img_miniature')):
-                            img_path = product['metadata']['properties']['ru_img_miniature']
-                            first_item_image = f"https://cvety.kz{img_path}"
-                    
-                    # Fallback: Try to get image for dynamic products (assembled bouquets) from production server
-                    if not first_item_image and first_item.get('product_snapshot'):
-                        snapshot = first_item['product_snapshot']
-                        if isinstance(snapshot, dict) and snapshot.get('bitrix', {}).get('product_id'):
-                            bitrix_product_id = snapshot['bitrix']['product_id']
-                            first_item_image = f"https://cvety.kz/miniature/{bitrix_product_id}-obrannyy-buket.jpg"
+                    for item in items:
+                        product_id = item.get('product_id')
+                        item_image = None
+                        
+                        # Try to get image from regular products first
+                        if product_id and product_id in products_data:
+                            product = products_data[product_id]
+                            if (product.get('metadata') and 
+                                product['metadata'].get('properties', {}).get('ru_img_miniature')):
+                                img_path = product['metadata']['properties']['ru_img_miniature']
+                                item_image = f"https://cvety.kz{img_path}"
+                        
+                        # Fallback: Try to get image for dynamic products (assembled bouquets) from production server
+                        if not item_image and item.get('product_snapshot'):
+                            snapshot = item['product_snapshot']
+                            if isinstance(snapshot, dict) and snapshot.get('bitrix', {}).get('product_id'):
+                                bitrix_product_id = snapshot['bitrix']['product_id']
+                                item_image = f"https://cvety.kz/miniature/{bitrix_product_id}-obrannyy-buket.jpg"
+                        
+                        if item_image:
+                            item_images.append(item_image)
                 
-                order_dict['first_item_image'] = first_item_image
+                order_dict['item_images'] = item_images
+                # Keep backward compatibility for now
+                order_dict['first_item_image'] = item_images[0] if item_images else None
                 orders_with_images.append(order_dict)
         else:
             orders_with_images = []
         
-        return templates.TemplateResponse("orders.html", {
+        response = templates.TemplateResponse("orders.html", {
             "request": request,
             "orders": orders_with_images,
             "total": result.count,
@@ -487,6 +427,13 @@ async def list_orders(
             "current_view": view,
             "order_statuses": ORDER_STATUSES
         })
+        
+        # Add cache-busting headers to ensure fresh order data
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        
+        return response
         
     except Exception as e:
         logger.error(f"Orders list error: {e}")
@@ -893,31 +840,19 @@ async def create_order(
 ):
     """Create a new order"""
     try:
-        # Generate order number - get only numeric order numbers sorted
-        # Use raw SQL to get max numeric order number efficiently
-        result = db.rpc('get_max_order_number', {}).execute()
-        
-        if result.data:
-            max_number = result.data
-        else:
-            # Fallback: get all order numbers and find max
-            max_order = db.table('orders')\
-                .select('order_number')\
-                .limit(10000)\
-                .execute()
-            
-            max_number = 122000  # Default starting number
-            if max_order.data:
-                for order in max_order.data:
-                    order_num = order.get('order_number', '')
-                    if order_num and order_num.isdigit():
-                        num = int(order_num)
-                        if num > max_number:
-                            max_number = num
-        
-        logger.info(f"Found max order number: {max_number}")
-        new_number = str(max_number + 1)
+        # Generate order number using synchronized production number generator
+        new_number = order_number_generator.generate_order_number(
+            is_webhook=False,
+            force_local=False
+        )
         logger.info(f"Generated new order number: {new_number}")
+        
+        # Check if number already exists in Supabase
+        existing_order = db.table('orders').select('id').eq('order_number', new_number).execute()
+        if existing_order.data:
+            # If exists, use local prefix to avoid conflicts
+            new_number = order_number_generator.generate_local_order_number()
+            logger.warning(f"Order number collision detected, using local number: {new_number}")
         
         # Validate and update inventory first
         inventory_result = await validate_and_update_inventory(order_data.get('items', []), db, operation="reserve")
@@ -1003,10 +938,14 @@ async def order_detail(
         order_result = db.table('orders')\
             .select('*')\
             .eq('id', order_id)\
-            .single()\
             .execute()
         
         if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Get first order from results
+        order_data = order_result.data[0] if order_result.data else None
+        if not order_data:
             raise HTTPException(status_code=404, detail="Order not found")
         
         # Get order items
@@ -1014,6 +953,35 @@ async def order_detail(
             .select('*')\
             .eq('order_id', order_id)\
             .execute()
+        
+        # OPTIMIZATION: Batch load products to avoid N+1 queries with caching
+        from cache_utils import simple_cache, cache_key
+        
+        product_ids = [item.get('product_id') for item in items_result.data if item.get('product_id')]
+        products_by_id = {}
+        uncached_product_ids = []
+        
+        # Проверяем кэш для каждого продукта
+        for product_id in product_ids:
+            cache_k = cache_key('product', product_id)
+            cached_product = simple_cache.get(cache_k)
+            if cached_product:
+                products_by_id[product_id] = cached_product
+            else:
+                uncached_product_ids.append(product_id)
+        
+        # Загружаем только те продукты, которых нет в кэше
+        if uncached_product_ids:
+            products_query = db.table('products')\
+                .select('id, name, metadata')\
+                .in_('id', uncached_product_ids)\
+                .execute()
+            
+            # Добавляем в кэш и результат
+            for prod in products_query.data:
+                products_by_id[prod['id']] = prod
+                cache_k = cache_key('product', prod['id'])
+                simple_cache.set(cache_k, prod, ttl_seconds=300)  # 5 минут кэш для продуктов
         
         # Enrich order items with product images and names
         items_with_images = []
@@ -1024,24 +992,16 @@ async def order_detail(
             product_image = None
             product_name = None
             
-            if item.get('product_id'):
-                # Try to get data from products table
-                product_query = db.table('products')\
-                    .select('name, metadata')\
-                    .eq('id', item['product_id'])\
-                    .limit(1)\
-                    .execute()
+            if item.get('product_id') and item['product_id'] in products_by_id:
+                product = products_by_id[item['product_id']]
+                # Get product name
+                product_name = product.get('name')
                 
-                if product_query.data:
-                    product = product_query.data[0]
-                    # Get product name
-                    product_name = product.get('name')
-                    
-                    # Get product image
-                    if (product.get('metadata') and 
-                        product['metadata'].get('properties', {}).get('ru_img_miniature')):
-                        img_path = product['metadata']['properties']['ru_img_miniature']
-                        product_image = f"https://cvety.kz{img_path}"
+                # Get product image
+                if (product.get('metadata') and 
+                    product['metadata'].get('properties', {}).get('ru_img_miniature')):
+                    img_path = product['metadata']['properties']['ru_img_miniature']
+                    product_image = f"https://cvety.kz{img_path}"
             
             # Fallback: if no product_id or product not found, try product_snapshot
             if not product_name and item.get('product_snapshot'):
@@ -1064,7 +1024,6 @@ async def order_detail(
             items_with_images.append(item_dict)
         
         # Get customer information
-        order_data = order_result.data
         customer_info = None
         
         if order_data.get('user_id'):
@@ -1072,11 +1031,10 @@ async def order_detail(
                 customer_result = db.table('users')\
                     .select('*')\
                     .eq('id', order_data['user_id'])\
-                    .single()\
                     .execute()
                 
                 if customer_result.data:
-                    customer_info = customer_result.data
+                    customer_info = customer_result.data[0]
             except Exception as e:
                 logger.warning(f"Failed to load customer info for order {order_id}: {e}")
         
@@ -1088,11 +1046,10 @@ async def order_detail(
                 florist_result = db.table('users')\
                     .select('*')\
                     .eq('id', order_data['responsible_id'])\
-                    .single()\
                     .execute()
                 
                 if florist_result.data:
-                    florist_info = florist_result.data
+                    florist_info = florist_result.data[0]
             except Exception as e:
                 logger.warning(f"Failed to load florist info for order {order_id}: {e}")
         
@@ -1113,9 +1070,9 @@ async def order_detail(
                 elif 'transfer' in method or 'перевод' in method:
                     payment_method = "transfer"
         
-        return templates.TemplateResponse("order_detail.html", {
+        response = templates.TemplateResponse("order_detail.html", {
             "request": request,
-            "order": order_result.data,
+            "order": order_data,
             "items": items_with_images,
             "customer": customer_info,
             "florist": florist_info,
@@ -1125,10 +1082,19 @@ async def order_detail(
             "payment_methods": PAYMENT_METHODS
         })
         
+        # Add cache-busting headers to ensure fresh status data
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        
+        return response
+        
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
         logger.error(f"Order detail error: {e}")
+        logger.error(f"Stack trace: {traceback.format_exc()}")
         return templates.TemplateResponse("error.html", {
             "request": request,
             "error": "Failed to load order details",
@@ -1223,6 +1189,7 @@ async def list_products(
     category: Optional[str] = None,
     search: Optional[str] = None,
     seller_id: Optional[str] = None,
+    show_inactive: bool = True,  # CRM показывает все товары по умолчанию
     page: int = 1,
     db: Client = Depends(get_supabase)
 ):
@@ -1260,6 +1227,12 @@ async def list_products(
             'id, name, price, old_price, is_active, created_at, description, slug, metadata, seller_id',
             count='exact'
         )
+        
+        # CRM логика: показывать все товары или только активные
+        if not show_inactive:
+            # Если явно запросили только активные товары
+            query = query.eq('is_active', True)
+        # По умолчанию (show_inactive=True) показываем все товары для администраторов
         
         # Apply filters
         if category:
@@ -1585,6 +1558,305 @@ async def delete_product(
         logger.error(f"Delete product error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete product")
 
+# ==================== PRODUCT STATUS MANAGEMENT ====================
+
+async def sync_product_status_to_bitrix(bitrix_id: str, is_active: bool):
+    """
+    Синхронизирует статус товара с Bitrix через PHP endpoint
+    
+    Args:
+        bitrix_id: ID товара в Bitrix
+        is_active: Новый статус товара
+    """
+    
+    # Проверка включена ли синхронизация
+    if not app_config.BITRIX_PRODUCT_SYNC_ENABLED:
+        logger.info(f"Product sync disabled, skipping sync for bitrix_id={bitrix_id}")
+        return
+    
+    # Проверка наличия bitrix_id
+    if not bitrix_id:
+        logger.warning("No bitrix_id provided, skipping sync")
+        return
+    
+    payload = {
+        "action": "update_product_status",
+        "bitrix_id": bitrix_id,
+        "is_active": is_active
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                app_config.BITRIX_PRODUCT_SYNC_URL,
+                json=payload,
+                headers={"X-API-TOKEN": app_config.BITRIX_API_TOKEN}
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    logger.info(f"✅ Product {bitrix_id} status synced to Bitrix (active={is_active})")
+                else:
+                    logger.error(f"❌ Bitrix sync failed: {result.get('error', 'Unknown error')}")
+            else:
+                logger.error(f"❌ Failed to sync product {bitrix_id}: HTTP {response.status_code}")
+                
+    except httpx.TimeoutException:
+        logger.error(f"⏱️ Timeout syncing product {bitrix_id} to Bitrix")
+    except Exception as e:
+        logger.error(f"❌ Error syncing product {bitrix_id} to Bitrix: {e}")
+        # Не блокируем основную операцию при ошибке синхронизации
+
+@app.post("/api/products/{product_id}/activate")
+async def activate_product(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Активировать товар"""
+    
+    try:
+        # Проверяем что товар существует и получаем его metadata
+        product_result = db.table('products')\
+            .select('id, name, is_active, metadata')\
+            .eq('id', product_id)\
+            .single()\
+            .execute()
+        
+        if not product_result.data:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        
+        product = product_result.data
+        product_name = product['name']
+        metadata = product.get('metadata', {}) or {}
+        bitrix_id = metadata.get('bitrix_id')
+        
+        if product['is_active']:
+            return {
+                "success": False,
+                "message": f"Товар '{product_name}' уже активен",
+                "product_id": product_id,
+                "is_active": True
+            }
+        
+        # Активируем товар в Supabase
+        result = db.table('products')\
+            .update({
+                'is_active': True,
+                'updated_at': datetime.utcnow().isoformat()
+            })\
+            .eq('id', product_id)\
+            .execute()
+        
+        logger.info(f"Activated product {product_id}: {product_name}")
+        
+        # Синхронизируем с Bitrix асинхронно
+        if bitrix_id:
+            asyncio.create_task(sync_product_status_to_bitrix(bitrix_id, True))
+        
+        return {
+            "success": True,
+            "message": f"Товар '{product_name}' активирован",
+            "product_id": product_id,
+            "is_active": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Activate product error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to activate product")
+
+@app.post("/api/products/{product_id}/deactivate")
+async def deactivate_product(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Деактивировать товар"""
+    
+    try:
+        # Проверяем что товар существует и получаем его metadata
+        product_result = db.table('products')\
+            .select('id, name, is_active, metadata')\
+            .eq('id', product_id)\
+            .single()\
+            .execute()
+        
+        if not product_result.data:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        
+        product = product_result.data
+        product_name = product['name']
+        metadata = product.get('metadata', {}) or {}
+        bitrix_id = metadata.get('bitrix_id')
+        
+        if not product['is_active']:
+            return {
+                "success": False,
+                "message": f"Товар '{product_name}' уже деактивирован",
+                "product_id": product_id,
+                "is_active": False
+            }
+        
+        # Деактивируем товар в Supabase
+        result = db.table('products')\
+            .update({
+                'is_active': False,
+                'updated_at': datetime.utcnow().isoformat()
+            })\
+            .eq('id', product_id)\
+            .execute()
+        
+        logger.info(f"Deactivated product {product_id}: {product_name}")
+        
+        # Синхронизируем с Bitrix асинхронно
+        if bitrix_id:
+            asyncio.create_task(sync_product_status_to_bitrix(bitrix_id, False))
+        
+        return {
+            "success": True,
+            "message": f"Товар '{product_name}' деактивирован",
+            "product_id": product_id,
+            "is_active": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deactivate product error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to deactivate product")
+
+# ==================== AVAILABILITY MANAGEMENT ====================
+
+async def sync_product_availability_to_bitrix(bitrix_id: str, is_available: bool):
+    """Синхронизация наличия товара в Bitrix через свойство IN_STOCK"""
+    if not app_config.BITRIX_PRODUCT_SYNC_ENABLED:
+        logger.info("Product sync is disabled")
+        return
+        
+    try:
+        payload = {
+            "action": "update_product_availability",
+            "bitrix_id": bitrix_id,
+            "is_available": is_available
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                app_config.BITRIX_PRODUCT_SYNC_URL,
+                json=payload,
+                headers={"X-API-TOKEN": app_config.BITRIX_API_TOKEN}
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get('success'):
+                logger.info(f"✅ Product {bitrix_id} availability synced to Bitrix: {is_available}")
+            else:
+                logger.error(f"❌ Failed to sync product {bitrix_id} availability: {result.get('error')}")
+                
+    except Exception as e:
+        logger.error(f"❌ Error syncing product {bitrix_id} availability to Bitrix: {e}")
+
+@app.post("/api/products/{product_id}/set-available")
+async def set_product_available(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Сделать товар доступным (в наличии)"""
+    
+    try:
+        # Проверяем что товар существует и получаем его metadata
+        product_result = db.table('products')\
+            .select('id, name, metadata')\
+            .eq('id', product_id)\
+            .execute()
+            
+        if not product_result.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+            
+        product = product_result.data[0]
+        product_name = product.get('name', 'Unknown')
+        
+        # Получаем bitrix_id из metadata
+        metadata = product.get('metadata', {})
+        bitrix_id = None
+        if isinstance(metadata, dict):
+            bitrix_id = metadata.get('bitrix_id')
+        
+        if not bitrix_id:
+            logger.warning(f"Product {product_id} has no bitrix_id, skipping Bitrix sync")
+        
+        # В будущем здесь будет обновление поля is_available в Supabase
+        # Пока что логируем действие
+        logger.info(f"Setting product '{product_name}' as AVAILABLE")
+        
+        # Синхронизируем с Bitrix если есть bitrix_id
+        if bitrix_id:
+            asyncio.create_task(sync_product_availability_to_bitrix(bitrix_id, True))
+        
+        return {
+            "success": True,
+            "message": f"Товар '{product_name}' сделан доступным",
+            "product_id": product_id,
+            "is_available": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Set available error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set product as available")
+
+@app.post("/api/products/{product_id}/set-unavailable")
+async def set_product_unavailable(
+    product_id: str,
+    db: Client = Depends(get_supabase)
+):
+    """Сделать товар недоступным (нет в наличии)"""
+    
+    try:
+        # Проверяем что товар существует и получаем его metadata
+        product_result = db.table('products')\
+            .select('id, name, metadata')\
+            .eq('id', product_id)\
+            .execute()
+            
+        if not product_result.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+            
+        product = product_result.data[0]
+        product_name = product.get('name', 'Unknown')
+        
+        # Получаем bitrix_id из metadata
+        metadata = product.get('metadata', {})
+        bitrix_id = None
+        if isinstance(metadata, dict):
+            bitrix_id = metadata.get('bitrix_id')
+        
+        if not bitrix_id:
+            logger.warning(f"Product {product_id} has no bitrix_id, skipping Bitrix sync")
+        
+        # В будущем здесь будет обновление поля is_available в Supabase
+        # Пока что логируем действие
+        logger.info(f"Setting product '{product_name}' as UNAVAILABLE")
+        
+        # Синхронизируем с Bitrix если есть bitrix_id
+        if bitrix_id:
+            asyncio.create_task(sync_product_availability_to_bitrix(bitrix_id, False))
+        
+        return {
+            "success": True,
+            "message": f"Товар '{product_name}' сделан недоступным",
+            "product_id": product_id,
+            "is_available": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Set unavailable error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set product as unavailable")
 
 
 # ==================== WAREHOUSE (СКЛАД) ====================
@@ -2368,14 +2640,23 @@ async def assign_florist(
 async def api_get_products(
     db: Client = Depends(get_supabase),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    include_inactive: bool = False,
+    seller_id: Optional[str] = None
 ):
     """Get all products via API"""
     try:
-        result = db.table('products')\
-            .select('*')\
-            .range(skip, skip + limit - 1)\
-            .execute()
+        query = db.table('products').select('*')
+        
+        # По умолчанию показываем только активные товары
+        if not include_inactive:
+            query = query.eq('is_active', True)
+        
+        # Фильтр по магазину если указан
+        if seller_id:
+            query = query.eq('seller_id', seller_id)
+        
+        result = query.range(skip, skip + limit - 1).execute()
         return result.data
     except Exception as e:
         logger.error(f"API get products error: {e}")
@@ -2545,31 +2826,19 @@ async def api_create_order(
 ):
     """Create a new order via API"""
     try:
-        # Generate order number - get only numeric order numbers sorted
-        # Use raw SQL to get max numeric order number efficiently
-        result = db.rpc('get_max_order_number', {}).execute()
-        
-        if result.data:
-            max_number = result.data
-        else:
-            # Fallback: get all order numbers and find max
-            max_order = db.table('orders')\
-                .select('order_number')\
-                .limit(10000)\
-                .execute()
-            
-            max_number = 122000  # Default starting number
-            if max_order.data:
-                for order in max_order.data:
-                    order_num = order.get('order_number', '')
-                    if order_num and order_num.isdigit():
-                        num = int(order_num)
-                        if num > max_number:
-                            max_number = num
-        
-        logger.info(f"Found max order number: {max_number}")
-        new_number = str(max_number + 1)
+        # Generate order number using synchronized production number generator
+        new_number = order_number_generator.generate_order_number(
+            is_webhook=False,
+            force_local=False
+        )
         logger.info(f"Generated new order number: {new_number}")
+        
+        # Check if number already exists in Supabase
+        existing_order = db.table('orders').select('id').eq('order_number', new_number).execute()
+        if existing_order.data:
+            # If exists, use local prefix to avoid conflicts
+            new_number = order_number_generator.generate_local_order_number()
+            logger.warning(f"Order number collision detected, using local number: {new_number}")
         
         # Validate and update inventory first
         inventory_result = await validate_and_update_inventory(order_data.get('items', []), db, operation="reserve")
@@ -2716,9 +2985,72 @@ async def webhook_bitrix_order(
         from core.transformer import OptimizedTransformer
         transformer = OptimizedTransformer()
         
+        # Initialize supabase_order variable
+        supabase_order = None
+        
         if event == 'order.create':
             # Transform Bitrix order to Supabase format
             supabase_order = transformer.transform_bitrix_to_supabase(data)
+            
+            # Ensure we use the original Bitrix order number
+            if supabase_order:
+                bitrix_number = data.get('ACCOUNT_NUMBER') or data.get('ID')
+                if bitrix_number:
+                    supabase_order['order_number'] = str(bitrix_number)
+                    supabase_order['bitrix_order_id'] = int(data.get('ID'))
+                    logger.info(f"Using original Bitrix order number: {bitrix_number}")
+        elif event in ['order.update', 'order.status.change', 'order.status_change', 'order.status_change_direct']:
+            # Handle order updates and status changes
+            logger.info(f"Processing order update/status change for order {data.get('ID')}")
+            
+            # Check if order exists in Supabase
+            existing = db.table('orders').select('id, status').eq('bitrix_order_id', data['ID']).execute()
+            
+            if not existing.data:
+                logger.warning(f"Order {data.get('ID')} not found in Supabase for update")
+                logger.info(f"Attempting to create missing order {data.get('ID')} from update webhook")
+                
+                # Try to create the missing order using the update data
+                supabase_order = transformer.transform_bitrix_to_supabase(data)
+                if supabase_order:
+                    # Use original Bitrix order number
+                    bitrix_number = data.get('ACCOUNT_NUMBER') or data.get('ID')
+                    if bitrix_number:
+                        supabase_order['order_number'] = str(bitrix_number)
+                        supabase_order['bitrix_order_id'] = int(data.get('ID'))
+                        logger.info(f"Creating missing order with original number: {bitrix_number}")
+                    
+                    # Continue with order creation logic instead of returning
+                else:
+                    logger.error(f"Failed to transform missing order {data.get('ID')}")
+                    return {"status": "error", "action": "order_transform_failed", "order_id": data.get('ID')}
+            
+            # Transform update data
+            update_data = transformer.transform_bitrix_update(data)
+            
+            if update_data and existing.data:
+                # Update existing order
+                result = db.table('orders').update(update_data).eq('bitrix_order_id', data['ID']).execute()
+                
+                # Log status change if it occurred
+                if 'status' in update_data:
+                    old_status = existing.data[0].get('status')
+                    new_status = update_data['status']
+                    logger.info(f"Order {data.get('ID')} status changed: {old_status} → {new_status}")
+                
+                return {"status": "success", "action": "order_updated", "order_id": data.get('ID'), "changes": list(update_data.keys())}
+            elif not existing.data and supabase_order:
+                # Order doesn't exist, create it - don't return here, continue to creation logic
+                logger.info(f"Creating missing order {data.get('ID')} that was updated via webhook")
+            else:
+                logger.info(f"No significant changes detected for order {data.get('ID')}")
+                return {"status": "success", "action": "no_changes", "order_id": data.get('ID')}
+        else:
+            logger.warning(f"Unknown event type: {event}")
+            return {"status": "success", "action": "unknown_event", "event": event}
+
+        # Handle order creation - continue with existing logic
+        if event == 'order.create':
             
             # Handle user creation/update if USER_ID and user data are provided
             if 'USER_ID' in data and data['USER_ID'] and 'user' in data:
@@ -2734,7 +3066,8 @@ async def webhook_bitrix_order(
                     del user_update['created_at']  # Don't update creation time
                     
                     db.table('users').update(user_update).eq('id', user_result.data[0]['id']).execute()
-                    supabase_order['user_id'] = user_result.data[0]['id']
+                    if supabase_order is not None:
+                        supabase_order['user_id'] = user_result.data[0]['id']
                     logger.info(f"Updated user {user_result.data[0]['id']} for bitrix_user_id {bitrix_user_id}")
                 else:
                     # Create new user
@@ -2742,7 +3075,8 @@ async def webhook_bitrix_order(
                     user_result = db.table('users').insert(new_user).execute()
                     
                     if user_result.data:
-                        supabase_order['user_id'] = user_result.data[0]['id']
+                        if supabase_order is not None:
+                            supabase_order['user_id'] = user_result.data[0]['id']
                         logger.info(f"Created new user {user_result.data[0]['id']} for bitrix_user_id {bitrix_user_id}")
                     else:
                         logger.error(f"Failed to create user for bitrix_user_id {bitrix_user_id}")
@@ -2750,10 +3084,16 @@ async def webhook_bitrix_order(
                 # Fallback: only lookup existing user without user data
                 user_result = db.table('users').select('id').eq('bitrix_user_id', int(data['USER_ID'])).execute()
                 if user_result.data:
-                    supabase_order['user_id'] = user_result.data[0]['id']
+                    if supabase_order is not None:
+                        supabase_order['user_id'] = user_result.data[0]['id']
                     logger.info(f"Found user {user_result.data[0]['id']} for bitrix_user_id {data['USER_ID']}")
                 else:
                     logger.warning(f"User not found for bitrix_user_id {data['USER_ID']} and no user data provided")
+            
+            # Check if we have a valid order to process
+            if supabase_order is None:
+                logger.error(f"Cannot process order {data.get('ID')}: supabase_order is None")
+                return {"status": "error", "message": "Order data transformation failed", "order_id": data.get('ID')}
             
             # Check if order already exists by bitrix_order_id
             existing = db.table('orders').select('id').eq('bitrix_order_id', data['ID']).execute()
@@ -3459,6 +3799,8 @@ async def get_webhook_stats():
         logger.error(f"Error getting webhook stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== MODULAR WEBHOOK HANDLERS ====================
+
 @app.post("/webhooks/bitrix/product")
 async def webhook_bitrix_product(
     request: Request,
@@ -3466,140 +3808,83 @@ async def webhook_bitrix_product(
 ):
     """
     Handle webhook from Bitrix for product creation/update/deletion
+    Uses modular webhooks.products module for cleaner architecture
     """
+    from webhooks.products import handle_product_webhook
+    return await handle_product_webhook(request, db)
+
+@app.post("/webhooks/bitrix/shop")
+async def webhook_bitrix_shop(
+    request: Request,
+    db: Client = Depends(get_supabase)
+):
+    """
+    Handle webhook from Bitrix for shop creation/update/status changes
+    Automatically updates product statuses when shop status changes
+    """
+    from webhooks.shops import handle_shop_webhook
+    return await handle_shop_webhook(request, db)
+
+@app.post("/webhooks/bitrix/florist")
+async def webhook_bitrix_florist(
+    request: Request,
+    db: Client = Depends(get_supabase)
+):
+    """
+    Handle webhook from Bitrix for florist activation/deactivation/shop assignment
+    Automatically updates product statuses when florist status changes
+    """
+    from webhooks.florists import handle_florist_webhook
+    return await handle_florist_webhook(request, db)
+
+# ==================== MODULAR WEBHOOK API ENDPOINTS ====================
+
+@app.post("/api/sync/products/status")
+async def sync_products_status(db: Client = Depends(get_supabase)):
+    """Синхронизирует статусы всех товаров согласно 4 критериям активности"""
+    from webhooks.products import sync_all_product_statuses
+    
     try:
-        # Get request body
-        body = await request.json()
-        
-        # Validate token
-        token = body.get('token')
-        if token != app_config.WEBHOOK_TOKEN:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        event = body.get('event')
-        data = body.get('data', {})
-        
-        logger.info(f"Received product webhook: {event}, product ID: {data.get('ID')}")
-        
-        # Import transformer here to avoid circular imports
-        from transformers.product_transformer import ProductTransformer
-        transformer = ProductTransformer()
-        
-        if event == 'product.create':
-            # Transform Bitrix product to Supabase format
-            supabase_product = transformer.transform_product(body)
-            
-            # Validate transformed data
-            if not transformer.validate_product_data(supabase_product):
-                raise HTTPException(status_code=400, detail="Invalid product data")
-            
-            # Check if product already exists using metadata.bitrix_id
-            bitrix_id = supabase_product['metadata']['bitrix_id']
-            existing = db.table('products').select('id').eq('metadata->>bitrix_id', bitrix_id).execute()
-            
-            if existing.data:
-                # Update existing product
-                result = db.table('products').update(supabase_product).eq('metadata->>bitrix_id', bitrix_id).execute()
-                action = "update_existing"
-                product_id = existing.data[0]['id']
-            else:
-                # Create new product
-                result = db.table('products').insert(supabase_product).execute()
-                action = "create_new"
-                product_id = result.data[0]['id'] if result.data else None
-            
-            logger.info(f"Product {action}: Bitrix ID {bitrix_id} → Supabase ID {product_id}")
-            
-            # Отправляем Telegram уведомление (асинхронно, не блокируя ответ)
-            asyncio.create_task(send_product_telegram_notification(supabase_product, action))
-            
-            return {
-                "status": "success",
-                "action": action,
-                "product_id": product_id,
-                "bitrix_product_id": bitrix_id
-            }
-            
-        elif event == 'product.update':
-            # Transform and update existing product
-            supabase_product = transformer.transform_product(body)
-            
-            if not transformer.validate_product_data(supabase_product):
-                raise HTTPException(status_code=400, detail="Invalid product data")
-            
-            # Update product by metadata.bitrix_id
-            bitrix_id = supabase_product['metadata']['bitrix_id']
-            result = db.table('products').update(supabase_product).eq('metadata->>bitrix_id', bitrix_id).execute()
-            
-            if result.data:
-                product_id = result.data[0]['id']
-                logger.info(f"Product updated: Bitrix ID {bitrix_id} → Supabase ID {product_id}")
-                
-                # Отправляем Telegram уведомление
-                asyncio.create_task(send_product_telegram_notification(supabase_product, "update"))
-                
-                return {
-                    "status": "success", 
-                    "action": "update",
-                    "product_id": product_id,
-                    "bitrix_product_id": bitrix_id
-                }
-            else:
-                # Product not found, create new
-                result = db.table('products').insert(supabase_product).execute()
-                product_id = result.data[0]['id'] if result.data else None
-                
-                logger.info(f"Product not found, created new: Bitrix ID {supabase_product['bitrix_product_id']} → Supabase ID {product_id}")
-                
-                return {
-                    "status": "success",
-                    "action": "create_new", 
-                    "product_id": product_id,
-                    "bitrix_product_id": bitrix_id
-                }
-                
-        elif event == 'product.delete':
-            # Soft delete or mark as inactive
-            bitrix_product_id = data.get('ID')
-            if not bitrix_product_id:
-                raise HTTPException(status_code=400, detail="Product ID is required")
-            
-            # Mark product as inactive instead of hard delete
-            result = db.table('products').update({
-                'is_active': False,
-                'updated_at': datetime.utcnow().isoformat()
-            }).eq('bitrix_product_id', int(bitrix_product_id)).execute()
-            
-            if result.data:
-                product_id = result.data[0]['id']
-                logger.info(f"Product deactivated: Bitrix ID {bitrix_product_id} → Supabase ID {product_id}")
-                
-                return {
-                    "status": "success",
-                    "action": "deactivate",
-                    "product_id": product_id,
-                    "bitrix_product_id": bitrix_product_id
-                }
-            else:
-                logger.warning(f"Product not found for deletion: Bitrix ID {bitrix_product_id}")
-                return {
-                    "status": "not_found",
-                    "action": "skip",
-                    "bitrix_product_id": bitrix_product_id
-                }
-        
-        else:
-            logger.warning(f"Unknown product event: {event}")
-            return {"status": "error", "detail": f"Unknown event: {event}"}
-            
-    except HTTPException:
-        raise
+        stats = await sync_all_product_statuses(db)
+        return {
+            "status": "success",
+            "message": "Product status synchronization completed",
+            "stats": stats
+        }
     except Exception as e:
-        logger.error(f"Product webhook error for product {data.get('ID', 'unknown')}: {str(e)}")
-        logger.error(f"Error type: {type(e).__name__}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in product status sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/sync/shops")
+async def sync_shops_from_bitrix(db: Client = Depends(get_supabase)):
+    """Синхронизирует магазины из Bitrix в Supabase"""
+    from webhooks.shops import update_shop_product_counts
+    
+    try:
+        await update_shop_product_counts(db)
+        return {
+            "status": "success",
+            "message": "Shop synchronization completed"
+        }
+    except Exception as e:
+        logger.error(f"Error in shop sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/florists/stats")
+async def get_florists_stats():
+    """Получает статистику по флористам"""
+    from webhooks.florists import get_florist_statistics
+    
+    try:
+        stats = await get_florist_statistics()
+        return {
+            "status": "success",
+            "data": stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting florist stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ==================== TELEGRAM NOTIFICATION HELPERS ====================
@@ -3627,6 +3912,27 @@ async def send_error_telegram_notification(error_type: str, error_data: dict):
         await send_error_notification(error_type, error_data)
     except Exception as e:
         logger.error(f"Failed to send error telegram notification: {e}")
+
+# ==================== CACHE MONITORING ====================
+
+@app.get("/cache/stats")
+async def cache_stats():
+    """Cache statistics endpoint for monitoring performance"""
+    from cache_utils import simple_cache
+    return {
+        "cache_stats": simple_cache.stats(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear all cache (for debugging)"""
+    from cache_utils import simple_cache
+    simple_cache.clear()
+    return {
+        "message": "Cache cleared",
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 if __name__ == "__main__":
