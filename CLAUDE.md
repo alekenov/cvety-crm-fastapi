@@ -921,3 +921,150 @@ railway up --service=FastAPI
 
 **STATUS: PRODUCTION READY** 🚀
 All critical issues resolved, monitoring in place, emergency procedures documented.
+
+## Product Availability Management (WORKING ✅)
+
+### Overview
+**Feature**: Real-time product availability toggle with bidirectional Supabase ↔ Bitrix synchronization  
+**Status**: Fully functional with UI and API integration  
+**Location**: Product detail pages (`/crm/products/{id}`)
+
+### API Endpoints (TESTED ✅)
+
+#### Set Product Available
+```bash
+POST /api/products/{id}/set-available
+Content-Type: application/json
+
+# Updates metadata.properties.IN_STOCK = '158' (в наличии)
+# Syncs to Bitrix production automatically
+# Returns: {"success": true, "message": "Товар сделан доступным", "is_available": true}
+```
+
+#### Set Product Unavailable  
+```bash
+POST /api/products/{id}/set-unavailable
+Content-Type: application/json
+
+# Updates metadata.properties.IN_STOCK = '159' (нет в наличии)
+# Syncs to Bitrix production automatically
+# Returns: {"success": true, "message": "Товар сделан недоступным", "is_available": false}
+```
+
+### IN_STOCK Status Values
+```python
+'158' = В наличии (Available)     # Green badge, "Сделать недоступным" button
+'159' = Нет в наличии (Unavailable) # Red badge, "Сделать доступным" button
+```
+
+### UI Components (product_detail.html)
+
+#### Availability Management Section
+- **Status Display**: Visual badge showing current availability state
+- **Toggle Button**: Dynamic button text based on current state
+- **Success Feedback**: Alert notification + automatic page reload
+- **Error Handling**: Network errors and API failures handled gracefully
+
+#### Site Preview Integration
+```html
+<!-- Shows only if ru_url is available -->
+<a href="https://cvety.kz/products/{{ ru_url }}/" target="_blank" class="btn btn-success">
+    🔗 Просмотреть на сайте
+</a>
+```
+
+### JavaScript Functionality (toggleProductAvailability)
+
+#### Features
+- **Button Locking**: Prevents double-clicks during API calls
+- **Loading State**: Shows "⏳ Обработка..." during requests  
+- **Success Handling**: Alert + 1-second delay + page reload
+- **Error Recovery**: Restores original button state on failures
+
+#### Implementation Pattern
+```javascript
+// Disable button → API call → Show result → Reload page
+button.disabled = true;
+const response = await fetch(`/api/products/${productId}/${action}`, {method: 'POST'});
+alert(result.message);
+setTimeout(() => window.location.reload(), 1000);
+```
+
+### Database Schema Integration
+
+#### Metadata Structure
+```json
+{
+  "properties": {
+    "IN_STOCK": "158",           // Availability status
+    "ru_url": "15652",          // For site preview link
+    "bitrix_id": "9999"         // For Bitrix synchronization
+  }
+}
+```
+
+#### Update Query Pattern
+```python
+# API endpoints update both metadata and timestamp
+db.table('products').update({
+    'metadata': updated_metadata,
+    'updated_at': datetime.now().isoformat()
+}).eq('id', product_id).execute()
+```
+
+### Bitrix Synchronization (WORKING ✅)
+
+#### Automatic Sync
+- **Trigger**: Every availability change in CRM
+- **Method**: `sync_product_availability_to_bitrix(bitrix_id, is_available)`
+- **Logs**: `✅ Product {bitrix_id} availability synced to Bitrix: {status}`
+
+#### Sync Direction
+```
+CRM Toggle → Supabase Update → Bitrix API Call → Production Site Update
+```
+
+### Testing Commands
+
+#### Test via curl
+```bash
+# Set available
+curl -X POST http://localhost:8001/api/products/{id}/set-available
+
+# Set unavailable  
+curl -X POST http://localhost:8001/api/products/{id}/set-unavailable
+
+# Verify database change
+mcp__supabase__execute_sql "SELECT metadata->'properties'->>'IN_STOCK' FROM products WHERE id='{id}'"
+```
+
+#### Test via MCP Playwright
+```javascript
+// Navigate to product detail page
+await page.goto('http://localhost:8001/crm/products/{id}');
+
+// Click availability toggle button
+await page.getByRole('button', { name: /Сделать/ }).click();
+
+// Handle success alert
+await page.getByRole('dialog').getByRole('button', { name: 'OK' }).click();
+```
+
+### Common Issues & Solutions
+
+#### Issue: API returns success but no database change
+**Cause**: Endpoints were incomplete (commented out with "В будущем...")  
+**Fixed**: Added actual metadata update logic with proper IN_STOCK field modification
+
+#### Issue: UI doesn't reflect changes after toggle
+**Cause**: Page needs refresh to show updated template data  
+**Fixed**: Added automatic page reload with 1-second delay after successful API call
+
+#### Issue: Button shows wrong state after page load
+**Cause**: Template logic checks IN_STOCK value for button text  
+**Fixed**: Proper template conditions with '158'/'159' value checking
+
+### Production Deployment
+- **Platform**: Railway (https://fastapi-production-8b59.up.railway.app)
+- **Status**: Deployed and working in production environment
+- **Monitoring**: Railway logs show successful API calls and Bitrix sync operations
